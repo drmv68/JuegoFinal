@@ -1,0 +1,26 @@
+<RCC>
+    <qresource prefix="/recursos_estaticos">
+        <!-- Mapas -->
+        <!-- <file>mapas/nivel1_patio/terreno.txt</file> -->
+        <!-- <file>mapas/nivel1_patio/detalles.txt</file> -->
+        <!-- <file>mapas/nivel2_ampliado/terreno.txt</file> -->
+        <!-- <file>mapas/nivel2_ampliado/detalles.txt</file> -->
+
+        <!-- Bancos de datos -->
+        <!-- <file>datos/banco_de_misiones.txt</file> -->
+        <!-- <file>datos/banco_de_identidades.txt</file> -->
+        <!-- <file>datos/banco_de_trampas.txt</file> -->
+        <!-- <file>datos/banco_de_giros.txt</file> -->
+        <!-- <file>datos/banco_de_dialogos.txt</file> -->
+
+        <!-- Imagenes: descomentar cada archivo al agregarlo -->
+        <!-- <file>imagenes/personajes/...</file> -->
+        <!-- <file>imagenes/objetos/...</file> -->
+        <!-- <file>imagenes/terreno/...</file> -->
+        <!-- <file>imagenes/interfaz/...</file> -->
+
+        <!-- Sonidos: descomentar cada archivo al agregarlo -->
+        <!-- <file>sonidos/musica/...</file> -->
+        <!-- <file>sonidos/efectos/...</file> -->
+    </qresource>
+</RCC>

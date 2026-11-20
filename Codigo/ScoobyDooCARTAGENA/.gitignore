@@ -1,0 +1,23 @@
+# Carpetas de compilacion
+build/
+cmake-build-*/
+
+# Archivos objeto y temporales
+*.o
+*.obj
+*.exe
+*.dll
+*.pdb
+
+# Archivos de usuario del editor
+CMakeLists.txt.user
+*.user
+.qtcreator/
+
+# Datos locales de prueba (no pisar los del companero)
+perfiles.txt
+*.bak
+
+# Temporales de Word
+~$*
+~WRL*.tmp
