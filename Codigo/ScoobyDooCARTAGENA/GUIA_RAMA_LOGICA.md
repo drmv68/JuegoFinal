@@ -58,7 +58,6 @@ estos nombres en el codigo.
 8. `logica-juego` → recursos_de_la_partida, reloj_dia_noche,
    controlador_del_juego
 
-Cada rama se une a `principal` antes de empezar la siguiente.
 
 ---
 
