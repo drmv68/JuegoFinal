@@ -1,51 +1,39 @@
 # ESPECIFICACION TECNICA: elemento_del_mapa.h / elemento_del_mapa.cpp
 
-## Archivo de Cabecera: `elemento_del_mapa.h`
+## Archivo y Ubicacion
+`logica/personajes/elemento_del_mapa.h`
+`logica/personajes/elemento_del_mapa.cpp`
 
-### Guardas de inclusion
+## Proposito y Responsabilidad Unica
+Clase madre abstracta de cualquier entidad con presencia espacial en el mapa 2D. Asigna identificador unico de serie, gestiona coordenadas continuas y calcula colisiones AABB y orden de dibujo isometrico.
+
+## Dependencias
+### Para elemento_del_mapa.h
+- `#include "herramientas/tipos_espaciales.h"`
+
+### Para elemento_del_mapa.cpp
+- `#include "personajes/elemento_del_mapa.h"`
+- `#include "herramientas/calculos_espaciales.h"`
+
+## Definicion Exacta de Cabecera (elemento_del_mapa.h)
+
 ```cpp
 #ifndef ELEMENTO_DEL_MAPA_H
 #define ELEMENTO_DEL_MAPA_H
-```
 
-### Inclusiones requeridas
-```cpp
-#include "mapa/mapa.h"
-```
+#include "herramientas/tipos_espaciales.h"
 
-### Enumeracion
-```cpp
-enum class DireccionMirada {
-    Norte,
-    Sur,
-    Este,
-    Oeste
-};
-```
-
-### Declaracion de Clase Madre Abstracta `ElementoDelMapaBase`
-```cpp
 class ElementoDelMapaBase {
-private:
-    static int ultimoNumeroDeSerieAsignado;
-
-protected:
-    int numeroDeSerie;
-    double posicionX;
-    double posicionY;
-    double anchoDeColision;
-    double altoDeColision;
-    DireccionMirada direccionMirada;
-    bool estaActivo;
-    bool esVisible;
-
 public:
-    ElementoDelMapaBase(double posX, double posY, double ancho, double alto);
+    ElementoDelMapaBase(double posicionInicialX, double posicionInicialY, double anchoColision, double altoColision);
     virtual ~ElementoDelMapaBase() = default;
+
+    ElementoDelMapaBase(const ElementoDelMapaBase&) = delete;
+    ElementoDelMapaBase& operator=(const ElementoDelMapaBase&) = delete;
 
     virtual void avanzarUnCuadro(double segundosTranscurridos) = 0;
 
-    int obtenerNumeroDeSerie() const;
+    int obtenerNumeroDeSerieUnico() const;
     double obtenerPosicionX() const;
     double obtenerPosicionY() const;
     double obtenerAnchoDeColision() const;
@@ -54,68 +42,62 @@ public:
     bool obtenerEstaActivo() const;
     bool obtenerEsVisible() const;
 
-    void establecerPosicion(double nuevaX, double nuevaY);
+    void establecerPosicion(double nuevaPosicionX, double nuevaPosicionY);
     void establecerDireccionMirada(DireccionMirada nuevaDireccion);
-    void establecerActivo(bool activo);
-    void establecerVisible(bool visible);
+    void establecerActivo(bool estadoActivo);
+    void establecerVisible(bool estadoVisible);
 
     CoordenadaCasilla obtenerCasillaActual() const;
     bool colisionaCon(const ElementoDelMapaBase& otroElemento) const;
-    double calcularOrdenDeDibujo() const;
+    double calcularPrioridadDeDibujoIsometrico() const;
+
+protected:
+    int numeroDeSerieUnico;
+    double posicionX;
+    double posicionY;
+    double anchoDeColision;
+    double altoDeColision;
+    DireccionMirada direccionMirada;
+    bool estaActivo;
+    bool esVisible;
+
+private:
+    static int generadorSecuencialDeNumeroDeSerie;
 };
 
 #endif
 ```
 
----
-
-## Archivo de Implementacion: `elemento_del_mapa.cpp`
-
-### Inclusiones requeridas
-```cpp
-#include "personajes/elemento_del_mapa.h"
-#include "herramientas/calculos_espaciales.h"
-#include <cmath>
-```
+## Algoritmo Paso a Paso (elemento_del_mapa.cpp)
 
 ### Inicializacion de Variable Estatica
 ```cpp
-int ElementoDelMapaBase::ultimoNumeroDeSerieAsignado = 0;
+int ElementoDelMapaBase::generadorSecuencialDeNumeroDeSerie = 0;
 ```
 
-### Implementacion de Metodos
+### Constructor
+1. Incrementar y asignar `numeroDeSerieUnico = ++generadorSecuencialDeNumeroDeSerie;`.
+2. Asignar `posicionX = posicionInicialX; posicionY = posicionInicialY;`.
+3. Asignar `anchoDeColision = anchoColision; altoDeColision = altoColision;`.
+4. Asignar `direccionMirada = DireccionMirada::Sur;`.
+5. Asignar `estaActivo = true; esVisible = true;`.
 
-#### 1. Constructor
-- **Firma:** `ElementoDelMapaBase::ElementoDelMapaBase(double posX, double posY, double ancho, double alto)`
-- **Logica:**
-  - `numeroDeSerie = ++ultimoNumeroDeSerieAsignado;`
-  - `posicionX = posX; posicionY = posY;`
-  - `anchoDeColision = ancho; altoDeColision = alto;`
-  - `direccionMirada = DireccionMirada::Sur;`
-  - `estaActivo = true; esVisible = true;`
+### obtenerCasillaActual() const
+1. Retornar `CalculosEspaciales::convertirPosicionACasilla(posicionX, posicionY)`.
 
-#### 2. Getters y Setters
-- Implementacion estandar de acceso a atributos protegidos.
+### colisionaCon(const ElementoDelMapaBase& otroElemento) const
+1. Si `!estaActivo || !otroElemento.estaActivo`, retornar `false`.
+2. Calcular semianchos y semialtos:
+   - `mitadAnchoPropio = anchoDeColision * 0.5;`
+   - `mitadAltoPropio = altoDeColision * 0.5;`
+   - `mitadAnchoOtro = otroElemento.anchoDeColision * 0.5;`
+   - `mitadAltoOtro = otroElemento.altoDeColision * 0.5;`
+3. Evaluar solapamiento en el eje horizontal:
+   - `solapaHorizontal = (posicionX + mitadAnchoPropio >= otroElemento.posicionX - mitadAnchoOtro) && (posicionX - mitadAnchoPropio <= otroElemento.posicionX + mitadAnchoOtro);`
+4. Evaluar solapamiento en el eje vertical:
+   - `solapaVertical = (posicionY + mitadAltoPropio >= otroElemento.posicionY - mitadAltoOtro) && (posicionY - mitadAltoPropio <= otroElemento.posicionY + mitadAltoOtro);`
+5. Retornar `solapaHorizontal && solapaVertical`.
 
-#### 3. `obtenerCasillaActual`
-- **Firma:** `CoordenadaCasilla ElementoDelMapaBase::obtenerCasillaActual() const`
-- **Logica:**
-  - Retorna `CalculosEspaciales::convertirPosicionACasilla(posicionX, posicionY);`
-
-#### 4. `colisionaCon`
-- **Firma:** `bool ElementoDelMapaBase::colisionaCon(const ElementoDelMapaBase& otroElemento) const`
-- **Logica:**
-  - Si `!estaActivo || !otroElemento.estaActivo` retorna `false`.
-  - Comparacion AABB centrada:
-    - `double mitadAnchoA = anchoDeColision / 2.0;`
-    - `double mitadAltoA = altoDeColision / 2.0;`
-    - `double mitadAnchoB = otroElemento.anchoDeColision / 2.0;`
-    - `double mitadAltoB = otroElemento.altoDeColision / 2.0;`
-    - `bool solapaX = (posicionX + mitadAnchoA >= otroElemento.posicionX - mitadAnchoB) && (posicionX - mitadAnchoA <= otroElemento.posicionX + mitadAnchoB);`
-    - `bool solapaY = (posicionY + mitadAltoA >= otroElemento.posicionY - mitadAltoB) && (posicionY - mitadAltoA <= otroElemento.posicionY + mitadAltoB);`
-    - Retorna `solapaX && solapaY;`
-
-#### 5. `calcularOrdenDeDibujo`
-- **Firma:** `double ElementoDelMapaBase::calcularOrdenDeDibujo() const`
-- **Logica:**
-  - Retorna `posicionX + posicionY;`
+### calcularPrioridadDeDibujoIsometrico() const
+1. En la proyeccion isometrica estandar, la profundidad cartesiana de oclusion equivale a la suma de coordenadas:
+   - Retornar `posicionX + posicionY`.

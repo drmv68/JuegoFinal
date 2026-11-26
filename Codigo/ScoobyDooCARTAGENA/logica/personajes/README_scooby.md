@@ -1,53 +1,97 @@
 # ESPECIFICACION TECNICA: scooby.h / scooby.cpp
 
-## Archivo de Cabecera: `scooby.h`
+## Archivo y Ubicacion
+`logica/personajes/scooby.h`
+`logica/personajes/scooby.cpp`
 
-### Guardas de inclusion
+## Proposito y Responsabilidad Unica
+Entidad controlada por el jugador. Administra estamina de sprint, penalizaciones de velocidad por contacto, camuflaje temporal en arbustos, proteccion de Daphne y desplazamiento por ejes independientes contra paredes.
+
+## Dependencias
+### Para scooby.h
+- `#include "personajes/elemento_del_mapa.h"`
+- `#include "juego/teclado.h"`
+- `#include <vector>`
+
+### Declaraciones adelantadas en scooby.h
+```cpp
+class Mapa;
+```
+
+### Para scooby.cpp
+- `#include "personajes/scooby.h"`
+- `#include "mapa/mapa.h"`
+- `#include "herramientas/calculos_espaciales.h"`
+- `#include <cmath>`
+
+## Definicion Exacta de Cabecera (scooby.h)
+
 ```cpp
 #ifndef SCOOBY_H
 #define SCOOBY_H
-```
 
-### Inclusiones requeridas
-```cpp
 #include "personajes/elemento_del_mapa.h"
 #include "juego/teclado.h"
 #include <vector>
-```
 
-### Enumeracion de Consecuencia
-```cpp
-enum class ConsecuenciaDelToque {
+class Mapa;
+
+enum class ConsecuenciaDelToque : uint8_t {
     SoloRalentizado,
     ActivarAlertaGlobal,
     Captura
 };
-```
 
-### Constantes constexpr
-```cpp
-namespace ConstantesScooby {
-    constexpr double VELOCIDAD_BASE_EN_CASILLAS_POR_SEGUNDO = 3.3;
-    constexpr double ALIENTO_MAXIMO_EN_SEGUNDOS = 3.0;
-    constexpr double MULTIPLICADOR_DE_SPRINT = 1.6;
-    constexpr double SEGUNDOS_DE_SPRINT_INFINITO = 20.0;
-    constexpr double FACTOR_DE_RALENTIZACION = 0.67;
-    constexpr double SEGUNDOS_PARA_OLVIDAR_TOQUES = 20.0;
-    constexpr double SEGUNDOS_DE_INMUNIDAD_TRAS_TOQUE = 1.5;
-    constexpr double SEGUNDOS_MAXIMOS_DE_CAMUFLAJE_EN_ARBUSTO = 4.5;
-    constexpr double OPACIDAD_OCULTO = 0.45;
-    constexpr double OPACIDAD_NORMAL = 1.0;
-    constexpr int CANTIDAD_MAXIMA_DE_PROVISIONES_CARGADAS = 2;
-    constexpr double TASA_RECUPERACION_ALIENTO_CAMINANDO = 0.5;
-    constexpr double ALIENTO_MINIMO_PARA_VOLVER_A_CORRER = 1.0;
-    constexpr double ANCHO_COLISION_SCOOBY = 0.70;
-    constexpr double ALTO_COLISION_SCOOBY = 0.70;
-}
-```
+class Scooby final : public ElementoDelMapaBase {
+public:
+    static constexpr double velocidadBaseEnCasillasPorSegundo = 3.3;
+    static constexpr double alientoMaximoEnSegundos = 3.0;
+    static constexpr double multiplicadorVelocidadSprint = 1.6;
+    static constexpr double factorRalentizacionPorContacto = 0.67;
+    static constexpr double duracionSprintInfinitoPorFrutaEnSegundos = 20.0;
+    static constexpr double duracionRalentizacionPorContactoEnSegundos = 3.0;
+    static constexpr double segundosParaOlvidarToquesAcumulados = 20.0;
+    static constexpr double segundosDeInmunidadTrasToque = 1.5;
+    static constexpr double segundosMaximosDeCamuflajeEnArbusto = 4.5;
+    static constexpr double opacidadCamuflado = 0.45;
+    static constexpr double opacidadCompletamenteVisible = 1.0;
+    static constexpr double tasaRecuperacionAlientoPorSegundo = 0.5;
+    static constexpr double velocidadDeslizamientoEmpuje = 6.0;
+    static constexpr double factorAmortiguacionDeslizamiento = 0.85;
+    static constexpr int cantidadMaximaDeProvisionesCargadas = 2;
+    static constexpr double anchoColisionScooby = 0.70;
+    static constexpr double altoColisionScooby = 0.70;
 
-### Declaracion de Clase `Scooby`
-```cpp
-class Scooby : public ElementoDelMapaBase {
+    Scooby(double posicionInicialX, double posicionInicialY);
+    ~Scooby() override = default;
+
+    Scooby(const Scooby&) = delete;
+    Scooby& operator=(const Scooby&) = delete;
+
+    void avanzarUnCuadro(double segundosTranscurridos) override;
+    void moverSegunTeclado(const EstadoDeTeclado& teclado, double segundosTranscurridos, const Mapa& mapa);
+    void actualizarTemporizadoresDeEstado(double segundosTranscurridos);
+
+    ConsecuenciaDelToque recibirToqueDeSecuaz(bool partidaEnPanicoClimax);
+    void aplicarEmpujeDeFantasma(double origenFantasmaX, double origenFantasmaY);
+    void activarEsconditeDeDaphne(double segundosDeProteccion);
+    void activarSprintInfinitoPorFruta();
+    void ralentizarPorToque(double duracionSegundos);
+
+    double obtenerOpacidadVisual() const;
+    bool estaVisibleParaLosEnemigos() const;
+    double obtenerAlientoActual() const;
+    bool obtenerEstaEnSprint() const;
+    int obtenerContadorDeToquesDeSecuaz() const;
+    int obtenerProvisionesCargadas() const;
+
+    bool cargarProvision();
+    int descargarProvisionesCompletas();
+
+    const std::vector<int>& obtenerEvidenciasEnLaMano() const;
+    void agregarEvidencia(int codigoEvidencia);
+    void entregarEvidencias();
+
 private:
     double alientoActual;
     bool estaEnSprint;
@@ -63,119 +107,110 @@ private:
     double velocidadDeDeslizamientoY;
     int provisionesCargadas;
     std::vector<int> evidenciasEnLaMano;
-
-public:
-    Scooby(double posX, double posY);
-
-    void avanzarUnCuadro(double segundosTranscurridos) override;
-    void moverSegunTeclado(const EstadoDeTeclado& teclado, double segundosTranscurridos, const Mapa& mapa);
-    void actualizarTemporizadoresDeEstado(double segundosTranscurridos);
-    ConsecuenciaDelToque recibirToqueDeSecuaz(bool partidaEnPanico);
-    void aplicarEmpujeDeFantasma(double origenX, double origenY);
-    void activarEsconditeDeDaphne(double segundos);
-    void activarSprintInfinitoPorFruta(double segundos);
-    void ralentizar(double duracionSegundos);
-
-    double obtenerOpacidadVisual() const;
-    bool estaVisibleParaLosEnemigos() const;
-
-    double obtenerAlientoActual() const;
-    bool obtenerEstaEnSprint() const;
-    int obtenerContadorDeToquesDeSecuaz() const;
-    int obtenerProvisionesCargadas() const;
-    bool cargarProvision();
-    int descargarProvisiones();
-
-    const std::vector<int>& obtenerEvidenciasEnLaMano() const;
-    void agregarEvidencia(int codigoEvidencia);
-    void entregarEvidencias();
 };
 
 #endif
 ```
 
----
+## Algoritmo Paso a Paso (scooby.cpp)
 
-## Archivo de Implementacion: `scooby.cpp`
+### Constructor
+1. Invocar constructor base: `ElementoDelMapaBase(posicionInicialX, posicionInicialY, anchoColisionScooby, altoColisionScooby)`.
+2. Asignar `alientoActual = alientoMaximoEnSegundos; estaEnSprint = false;`.
+3. Asignar `segundosDeSprintInfinitoRestantes = 0.0; segundosDeRalentizacionRestantes = 0.0;`.
+4. Asignar `contadorDeToquesDeSecuaz = 0; segundosDesdeElUltimoToque = 0.0; segundosDeInmunidadRestantes = 0.0;`.
+5. Asignar `estaOcultoEnArbusto = false; segundosEscondidoEnElArbustoActual = 0.0; segundosDeEsconditeDeDaphneRestantes = 0.0;`.
+6. Asignar `velocidadDeDeslizamientoX = 0.0; velocidadDeDeslizamientoY = 0.0; provisionesCargadas = 0;`.
 
-### Inclusiones requeridas
-```cpp
-#include "personajes/scooby.h"
-#include "herramientas/calculos_espaciales.h"
-#include <cmath>
-```
+### avanzarUnCuadro(double segundosTranscurridos)
+1. Aplicar velocidad residual de deslizamiento:
+   - `posicionX += velocidadDeDeslizamientoX * segundosTranscurridos;`
+   - `posicionY += velocidadDeDeslizamientoY * segundosTranscurridos;`
+   - Amortiguar: `velocidadDeDeslizamientoX *= factorAmortiguacionDeslizamiento; velocidadDeDeslizamientoY *= factorAmortiguacionDeslizamiento;`.
+2. Invocar `actualizarTemporizadoresDeEstado(segundosTranscurridos);`.
 
-### Implementacion de Metodos
+### actualizarTemporizadoresDeEstado(double segundosTranscurridos)
+1. Si `segundosDeSprintInfinitoRestantes > 0.0`:
+   - `segundosDeSprintInfinitoRestantes -= segundosTranscurridos;`
+   - Si `segundosDeSprintInfinitoRestantes < 0.0`, asignar `segundosDeSprintInfinitoRestantes = 0.0;`.
+2. Si `segundosDeRalentizacionRestantes > 0.0`:
+   - `segundosDeRalentizacionRestantes -= segundosTranscurridos;`
+   - Si `segundosDeRalentizacionRestantes < 0.0`, asignar `segundosDeRalentizacionRestantes = 0.0;`.
+3. Si `segundosDeInmunidadRestantes > 0.0`:
+   - `segundosDeInmunidadRestantes -= segundosTranscurridos;`
+   - Si `segundosDeInmunidadRestantes < 0.0`, asignar `segundosDeInmunidadRestantes = 0.0;`.
+4. Si `segundosDeEsconditeDeDaphneRestantes > 0.0`:
+   - `segundosDeEsconditeDeDaphneRestantes -= segundosTranscurridos;`
+   - Si `segundosDeEsconditeDeDaphneRestantes < 0.0`, asignar `segundosDeEsconditeDeDaphneRestantes = 0.0;`.
+5. Sumar `segundosDesdeElUltimoToque += segundosTranscurridos;`.
+6. Si `segundosDesdeElUltimoToque >= segundosParaOlvidarToquesAcumulados`, asignar `contadorDeToquesDeSecuaz = 0;`.
+7. Si `estaOcultoEnArbusto`:
+   - Sumar `segundosEscondidoEnElArbustoActual += segundosTranscurridos;`.
+   - Si `segundosEscondidoEnElArbustoActual >= segundosMaximosDeCamuflajeEnArbusto`:
+     - `estaOcultoEnArbusto = false;`
 
-#### 1. Constructor
-- Llama a `ElementoDelMapaBase(posX, posY, ConstantesScooby::ANCHO_COLISION_SCOOBY, ConstantesScooby::ALTO_COLISION_SCOOBY)`.
-- `alientoActual = ConstantesScooby::ALIENTO_MAXIMO_EN_SEGUNDOS;`
-- Variables de temporizador e indicadores en 0.0 / false / 0.
+### moverSegunTeclado(const EstadoDeTeclado& teclado, double segundosTranscurridos, const Mapa& mapa)
+1. Determinar direccion segun entradas:
+   - `vectorX = 0.0; vectorY = 0.0;`
+   - Si `teclado.arriba`, `vectorY -= 1.0;`
+   - Si `teclado.abajo`, `vectorY += 1.0;`
+   - Si `teclado.izquierda`, `vectorX -= 1.0;`
+   - Si `teclado.derecha`, `vectorX += 1.0;`
+2. Si `vectorX == 0.0 && vectorY == 0.0`, terminar ejecucion.
+3. Actualizar `direccionMirada`:
+   - Si `std::fabs(vectorX) >= std::fabs(vectorY)`: `direccionMirada = (vectorX > 0.0) ? DireccionMirada::Este : DireccionMirada::Oeste;`
+   - En caso contrario: `direccionMirada = (vectorY > 0.0) ? DireccionMirada::Sur : DireccionMirada::Norte;`
+4. Normalizar vector diagonal dividiendo por `std::sqrt((vectorX * vectorX) + (vectorY * vectorY))`.
+5. Administrar estamina de sprint:
+   - Si `segundosDeSprintInfinitoRestantes > 0.0`:
+     - `estaEnSprint = teclado.correrActivo;`
+   - Si no:
+     - Si `teclado.correrActivo && alientoActual > 0.0`:
+       - `estaEnSprint = true;`
+       - `alientoActual -= segundosTranscurridos;`
+       - Si `alientoActual < 0.0`, asignar `alientoActual = 0.0; estaEnSprint = false;`.
+     - Si no esta corriendo:
+       - `estaEnSprint = false;`
+       - `alientoActual = CalculosEspaciales::mantenerValorDentroDelRango(alientoActual + (tasaRecuperacionAlientoPorSegundo * segundosTranscurridos), 0.0, alientoMaximoEnSegundos);`
+6. Determinar velocidad resultante:
+   - `velocidadCalculada = velocidadBaseEnCasillasPorSegundo;`
+   - Si `estaEnSprint`, `velocidadCalculada *= multiplicadorVelocidadSprint;`
+   - Si `segundosDeRalentizacionRestantes > 0.0`, `velocidadCalculada *= factorRalentizacionPorContacto;`
+7. Validar movimiento por ejes separados (deslizamiento suave):
+   - Probar eje horizontal: `candidataX = posicionX + (vectorX * velocidadCalculada * segundosTranscurridos);`
+   - Si `mapa.esPosicionTransitable(candidataX, posicionY, true)`, asignar `posicionX = candidataX;`.
+   - Probar eje vertical: `candidataY = posicionY + (vectorY * velocidadCalculada * segundosTranscurridos);`
+   - Si `mapa.esPosicionTransitable(posicionX, candidataY, true)`, asignar `posicionY = candidataY;`.
+8. Comprobar permanencia en arbusto:
+   - `CoordenadaCasilla celda = obtenerCasillaActual();`
+   - `CasillaDelMapa casilla = mapa.obtenerCasilla(celda.columna, celda.fila);`
+   - Si `casilla.esArbustoParaOcultarse == 1u`:
+     - Si `segundosEscondidoEnElArbustoActual < segundosMaximosDeCamuflajeEnArbusto`:
+       - `estaOcultoEnArbusto = true;`
+   - En caso contrario:
+     - `estaOcultoEnArbusto = false; segundosEscondidoEnElArbustoActual = 0.0;`
 
-#### 2. `avanzarUnCuadro`
-- Descuenta deslizamiento residual de clímax:
-  - `posicionX += velocidadDeDeslizamientoX * segundosTranscurridos;`
-  - `posicionY += velocidadDeDeslizamientoY * segundosTranscurridos;`
-  - Frena deslizamiento gradualmente (`velocidadDeDeslizamientoX *= 0.85; velocidadDeDeslizamientoY *= 0.85;`).
-- Llama a `actualizarTemporizadoresDeEstado(segundosTranscurridos);`
+### recibirToqueDeSecuaz(bool partidaEnPanicoClimax)
+1. Si `segundosDeInmunidadRestantes > 0.0`, retornar `ConsecuenciaDelToque::SoloRalentizado`.
+2. Asignar `segundosDeInmunidadRestantes = segundosDeInmunidadTrasToque;`.
+3. Asignar `segundosDesdeElUltimoToque = 0.0;`.
+4. Si `partidaEnPanicoClimax`, retornar `ConsecuenciaDelToque::Captura`.
+5. Incrementar `contadorDeToquesDeSecuaz++`.
+6. Si `contadorDeToquesDeSecuaz == 1`:
+   - `segundosDeRalentizacionRestantes = duracionRalentizacionPorContactoEnSegundos;`
+   - Retornar `ConsecuenciaDelToque::SoloRalentizado`.
+7. Si `contadorDeToquesDeSecuaz == 2`:
+   - Retornar `ConsecuenciaDelToque::ActivarAlertaGlobal`.
+8. Retornar `ConsecuenciaDelToque::Captura`.
 
-#### 3. `actualizarTemporizadoresDeEstado`
-- Descuenta `segundosDeSprintInfinitoRestantes`.
-- Descuenta `segundosDeRalentizacionRestantes`.
-- Descuenta `segundosDeInmunidadRestantes`.
-- Descuenta `segundosDeEsconditeDeDaphneRestantes`.
-- Aumenta `segundosDesdeElUltimoToque += segundosTranscurridos;`
-- Si `segundosDesdeElUltimoToque >= ConstantesScooby::SEGUNDOS_PARA_OLVIDAR_TOQUES`, `contadorDeToquesDeSecuaz = 0;`
-- Si `estaOcultoEnArbusto`:
-  - `segundosEscondidoEnElArbustoActual += segundosTranscurridos;`
-  - Si `segundosEscondidoEnElArbustoActual >= ConstantesScooby::SEGUNDOS_MAXIMOS_DE_CAMUFLAJE_EN_ARBUSTO`, `estaOcultoEnArbusto = false;`
+### aplicarEmpujeDeFantasma(double origenFantasmaX, double origenFantasmaY)
+1. `anguloEmpuje = CalculosEspaciales::calcularAnguloEntrePuntosEnRadianes(origenFantasmaX, origenFantasmaY, posicionX, posicionY);`
+2. `velocidadDeDeslizamientoX = std::cos(anguloEmpuje) * velocidadDeslizamientoEmpuje;`
+3. `velocidadDeDeslizamientoY = std::sin(anguloEmpuje) * velocidadDeslizamientoEmpuje;`
 
-#### 4. `moverSegunTeclado`
-- Determina vector direccion `(dirX, dirY)` segun `teclado.arriba, teclado.abajo, teclado.izquierda, teclado.derecha`.
-- Normaliza vector si es diagonal: `magnitud = std::sqrt(dirX * dirX + dirY * dirY)`. Si `magnitud > 0.0`, `dirX /= magnitud; dirY /= magnitud;`
-- Actualiza `direccionMirada` segun direccion dominante.
-- Evalua sprint:
-  - `bool intentaCorrer = teclado.correrActivo;`
-  - Si `segundosDeSprintInfinitoRestantes > 0.0`: `estaEnSprint = intentaCorrer;`
-  - Si no: corre solo si `intentaCorrer && alientoActual > 0.0`. Si corre, `alientoActual -= segundosTranscurridos;` si no corre, recupera `alientoActual += ConstantesScooby::TASA_RECUPERACION_ALIENTO_CAMINANDO * segundosTranscurridos;`
-  - Acota aliento entre `0.0` y `ConstantesScooby::ALIENTO_MAXIMO_EN_SEGUNDOS`.
-- Calcula velocidad efectiva:
-  - `vel = ConstantesScooby::VELOCIDAD_BASE_EN_CASILLAS_POR_SEGUNDO;`
-  - Si `estaEnSprint`: `vel *= ConstantesScooby::MULTIPLICADOR_DE_SPRINT;`
-  - Si `segundosDeRalentizacionRestantes > 0.0`: `vel *= ConstantesScooby::FACTOR_DE_RALENTIZACION;`
-- Movimiento por ejes (deslizamiento en esquinas):
-  - `nuevaX = posicionX + dirX * vel * segundosTranscurridos;`
-  - Si `mapa.esPosicionTransitable(nuevaX, posicionY, true)`: `posicionX = nuevaX;`
-  - `nuevaY = posicionY + dirY * vel * segundosTranscurridos;`
-  - Si `mapa.esPosicionTransitable(posicionX, nuevaY, true)`: `posicionY = nuevaY;`
-- Actualiza deteccion de arbusto:
-  - `CoordenadaCasilla cas = obtenerCasillaActual();`
-  - `bool pisandoArbusto = mapa.obtenerCasilla(cas.columna, cas.fila).esArbustoParaOcultarse;`
-  - Si `pisandoArbusto && segundosEscondidoEnElArbustoActual < ConstantesScooby::SEGUNDOS_MAXIMOS_DE_CAMUFLAJE_EN_ARBUSTO`, `estaOcultoEnArbusto = true;`
-  - Si no pisa arbusto, `estaOcultoEnArbusto = false; segundosEscondidoEnElArbustoActual = 0.0;`
+### obtenerOpacidadVisual() const
+1. Si `estaOcultoEnArbusto || segundosDeEsconditeDeDaphneRestantes > 0.0`, retornar `opacidadCamuflado`.
+2. Retornar `opacidadCompletamenteVisible`.
 
-#### 5. `recibirToqueDeSecuaz`
-- Si `segundosDeInmunidadRestantes > 0.0` retorna `ConsecuenciaDelToque::SoloRalentizado`.
-- `segundosDeInmunidadRestantes = ConstantesScooby::SEGUNDOS_DE_INMUNIDAD_TRAS_TOQUE;`
-- `segundosDesdeElUltimoToque = 0.0;`
-- Si `partidaEnPanico`: retorna `ConsecuenciaDelToque::Captura;`
-- `contadorDeToquesDeSecuaz++;`
-- Si `contadorDeToquesDeSecuaz == 1`:
-  - `segundosDeRalentizacionRestantes = 3.0;`
-  - Retorna `ConsecuenciaDelToque::SoloRalentizado;`
-- Si `contadorDeToquesDeSecuaz == 2`:
-  - Retorna `ConsecuenciaDelToque::ActivarAlertaGlobal;`
-- Retorna `ConsecuenciaDelToque::Captura;`
-
-#### 6. `aplicarEmpujeDeFantasma`
-- Calcula vector desde fantasma `(origenX, origenY)` hacia Scooby:
-  - `ang = std::atan2(posicionY - origenY, posicionX - origenX);`
-  - `velocidadDeDeslizamientoX = std::cos(ang) * 6.0;`
-  - `velocidadDeDeslizamientoY = std::sin(ang) * 6.0;`
-
-#### 7. `obtenerOpacidadVisual`
-- Si `estaOcultoEnArbusto || segundosDeEsconditeDeDaphneRestantes > 0.0` retorna `ConstantesScooby::OPACIDAD_OCULTO;`
-- Retorna `ConstantesScooby::OPACIDAD_NORMAL;`
-
-#### 8. `estaVisibleParaLosEnemigos`
-- Retorna `!(estaOcultoEnArbusto || segundosDeEsconditeDeDaphneRestantes > 0.0);`
+### estaVisibleParaLosEnemigos() const
+1. Retornar `!(estaOcultoEnArbusto || segundosDeEsconditeDeDaphneRestantes > 0.0)`.

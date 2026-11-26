@@ -1,82 +1,83 @@
-# ESPECIFICACION TECNICA: mision_traer.h / mision_traer.cpp
+# ESPECIFICACIÓN TÉCNICA DE BAJO NIVEL: MISIÓN TRAER
 
-## Archivo de Cabecera: `mision_traer.h`
+## 1. PROPÓSITO ARQUITECTÓNICO Y ROL EN EL SISTEMA
+La clase `MisionTraer` hereda de `MisionBase` y gestiona los objetivos tipo recolección y entrega (fetch-quest). Requiere que Scooby recolecte una cantidad determinada de objetos específicos en el mapa (por ejemplo, Scooby Galletas, piezas de motor, llaves del galeón o frutas) y los transporte o entregue a un personaje destinatario o a un cofre en una ubicación determinada.
 
-### Guardas de inclusion
+## 2. INCLUSIONES Y DEPENDENCIAS ESTRICTAS
 ```cpp
-#ifndef MISION_TRAER_H
-#define MISION_TRAER_H
-```
+#pragma once
 
-### Inclusiones requeridas
-```cpp
 #include "investigacion/misiones/mision.h"
+#include "personajes/objeto_recolectable.h"
+#include <cstdint>
+
+class MundoDeCartagena;
 ```
 
-### Declaracion de Clase `MisionTraer`
+## 3. DECLARACIÓN COMPLETA DE LA CLASE
 ```cpp
 class MisionTraer : public MisionBase {
-private:
-    CategoriaDeObjeto categoriaDelObjetoRequerido;
-    int cantidadRequerida;
-    int cantidadRecolectadaHastaAhora;
-    CoordenadaCasilla casillaDeEntrega;
-    bool generaAlertaAlRecoger;
-
 public:
-    MisionTraer(int codigo, int paso, const QString& titulo, CategoriaDeObjeto categoria, int cantidad, CoordenadaCasilla entrega, bool alertaAlRecoger);
+    MisionTraer(
+        int identificadorUnico,
+        std::string tituloDescriptivo,
+        std::string descripcionDetallada,
+        int recompensaDePuntaje,
+        TipoDeObjetoRecolectable tipoDeObjetoRequerido,
+        int cantidadTotalRequerida,
+        int identificadorDelDestinatario,
+        CoordenadaEntera coordenadaDeEntrega
+    );
 
-    void prepararMision(AzarConSemilla& azar, const Mapa& mapa) override;
-    bool evaluarCumplimientoEnCuadro(const SituacionActualDelMundo& situacion) override;
+    ~MisionTraer() override = default;
+
+    void iniciar(MundoDeCartagena& mundo) override;
+    void actualizar(MundoDeCartagena& mundo, float segundosTranscurridos) override;
+    bool verificarCondicionDeCompletitud(MundoDeCartagena& mundo) override;
+    void completar(MundoDeCartagena& mundo) override;
+    void reiniciar() override;
+
+    TipoDeObjetoRecolectable obtenerTipoDeObjetoRequerido() const;
+    int obtenerCantidadTotalRequerida() const;
+    int obtenerCantidadActualRecolectada() const;
+    int obtenerIdentificadorDelDestinatario() const;
+    const CoordenadaEntera& obtenerCoordenadaDeEntrega() const;
 
     void registrarObjetoRecolectado();
-    int obtenerCantidadRecolectadaHastaAhora() const;
-    int obtenerCantidadRequerida() const;
-    CoordenadaCasilla obtenerCasillaDeEntrega() const;
+    bool estaListoParaEntrega() const;
+    void confirmarEntregaExitosa();
+
+private:
+    TipoDeObjetoRecolectable tipoDeObjetoRequerido;
+    int cantidadTotalRequerida;
+    int cantidadActualRecolectada;
+    int identificadorDelDestinatario;
+    CoordenadaEntera coordenadaDeEntrega;
+    bool entregaRealizada;
 };
-
-#endif
 ```
 
----
+## 4. INVARIANTES DE CLASE Y REGLAS DE NEGOCIO
+1. `cantidadTotalRequerida` debe ser estrictamente mayor a 0.
+2. `cantidadActualRecolectada` nunca puede exceder `cantidadTotalRequerida`.
+3. `estaListoParaEntrega()` retorna verdadero únicamente cuando `cantidadActualRecolectada == cantidadTotalRequerida`.
+4. La entrega solo es exitosa si Scooby se encuentra dentro del radio de interacción del destinatario o de la casilla `coordenadaDeEntrega`.
 
-## Archivo de Implementacion: `mision_traer.cpp`
+## 5. LÓGICA PASO A PASO DE IMPLEMENTACIÓN
+### `iniciar`
+1. Establece `estado = EstadoDeMision::EnProgreso`.
+2. Restablece `cantidadActualRecolectada = 0`.
+3. Restablece `entregaRealizada = false`.
 
-### Inclusiones requeridas
-```cpp
-#include "investigacion/misiones/mision_traer.h"
-#include "personajes/scooby.h"
-#include "herramientas/calculos_espaciales.h"
-```
+### `actualizar`
+1. Verifica si `estado == EstadoDeMision::EnProgreso`. De lo contrario, retorna.
+2. Si `estaListoParaEntrega()` y Scooby activa la interacción con el destinatario o la coordenada de entrega, se invoca `confirmarEntregaExitosa()`.
+3. Evalúa `verificarCondicionDeCompletitud(mundo)`. Si resulta verdadero, invoca `completar(mundo)`.
 
-### Implementacion de Metodos
+### `registrarObjetoRecolectado`
+1. Si `cantidadActualRecolectada < cantidadTotalRequerida`:
+   - Incrementa `cantidadActualRecolectada++`.
 
-#### 1. Constructor
-- Llama a `MisionBase(codigo, paso, titulo)`.
-- `categoriaDelObjetoRequerido = categoria;`
-- `cantidadRequerida = cantidad;`
-- `cantidadRecolectadaHastaAhora = 0;`
-- `casillaDeEntrega = entrega;`
-- `generaAlertaAlRecoger = alertaAlRecoger;`
-
-#### 2. `prepararMision`
-- Baraja lista de arbustos o casillas transitables del mapa usando `azar.barajarListaDeCasillas`.
-- Para los primeros `cantidadRequerida` puntos:
-  - Crea un `EfectoDeMisionEnElMundo`:
-    - `tipo = TipoDeEfectoDeMision::CrearObjetoEnElMapa;`
-    - `casilla = casillaSorteada;`
-    - `categoriaObjeto = categoriaDelObjetoRequerido;`
-    - Agrega a `listaDeEfectosAlIniciar`.
-
-#### 3. `registrarObjetoRecolectado`
-- `cantidadRecolectadaHastaAhora++;`
-
-#### 4. `evaluarCumplimientoEnCuadro`
-- Si `cantidadRecolectadaHastaAhora < cantidadRequerida` retorna `false`.
-- Valida si Scooby esta en la `casillaDeEntrega` y pulso interactuar:
-  - `double distEjeX = CalculosEspaciales::calcularDistanciaEnUnEje(situacion.scooby.obtenerPosicionX(), casillaDeEntrega.columna + 0.5);`
-  - `double distEjeY = CalculosEspaciales::calcularDistanciaEnUnEje(situacion.scooby.obtenerPosicionY(), casillaDeEntrega.fila + 0.5);`
-  - Si `distEjeX <= 1.2 && distEjeY <= 1.2 && situacion.teclado.interactuarRecienPulsado`:
-    - `finalizarYMarcarComoCompletada();`
-    - Retorna `true;`
-- Retorna `false;`
+### `confirmarEntregaExitosa`
+1. Si `estaListoParaEntrega()`:
+   - Marca `entregaRealizada = true`.

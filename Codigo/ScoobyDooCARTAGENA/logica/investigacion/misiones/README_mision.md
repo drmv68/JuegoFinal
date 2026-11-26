@@ -1,126 +1,93 @@
-# ESPECIFICACION TECNICA: mision.h / mision.cpp
+# ESPECIFICACIÓN TÉCNICA DE BAJO NIVEL: MISIÓN BASE
 
-## Archivo de Cabecera: `mision.h`
+## 1. PROPÓSITO ARQUITECTÓNICO Y ROL EN EL SISTEMA
+La clase abstracta `MisionBase` define el contrato polimórfico de las misiones que componen los casos de investigación en Cartagena. Representa una meta intermedia que el jugador debe completar para obtener pistas, avanzar el diálogo con los ciudadanos o desbloquear áreas del mapa. No contiene dependencias gráficas y se comunica con el estado del juego mediante referencias a `MundoDeCartagena` y eventos de dominio.
 
-### Guardas de inclusion
+## 2. INCLUSIONES Y DEPENDENCIAS ESTRICTAS
 ```cpp
-#ifndef MISION_H
-#define MISION_H
+#pragma once
+
+#include "herramientas/tipos_espaciales.h"
+#include <string>
+#include <cstdint>
+
+class MundoDeCartagena;
 ```
 
-### Inclusiones requeridas
+## 3. ENUMERACIONES Y TIPOS AUXILIARES
 ```cpp
-#include <QString>
-#include <vector>
-#include "mapa/mapa.h"
-#include "personajes/objeto_del_escenario.h"
-#include "herramientas/azar_con_semilla.h"
-#include "juego/teclado.h"
-```
-
-### Declaraciones Adelantadas
-```cpp
-class Scooby;
-class PersonajeNoJugable;
-```
-
-### Enumeraciones y Estructuras
-```cpp
-enum class TipoDeEfectoDeMision {
-    AbrirPuerta,
-    CerrarPuerta,
-    CrearObjetoEnElMapa,
-    MostrarMarcaEnSuelo,
-    CambiarDialogoDePersonaje,
-    EntregarProvisiones,
-    EntregarGemas,
-    AlertarZona,
-    TacharSospechoso,
-    EscribirEnLibreta
+enum class TipoDeMision : uint8_t {
+    HablarConPersonaje = 0,
+    RecolectarYEntregarObjeto = 1,
+    ExaminarZonaOElemento = 2,
+    SincronizacionConPendulo = 3
 };
 
-struct EfectoDeMisionEnElMundo {
-    TipoDeEfectoDeMision tipo;
-    CoordenadaCasilla casilla;
-    CategoriaDeObjeto categoriaObjeto;
-    int cantidadNumerica;
-    QString textoInformativo;
-    QString clavePersonaje;
-};
-
-struct SituacionActualDelMundo {
-    const Scooby& scooby;
-    const Mapa& mapa;
-    const EstadoDeTeclado& teclado;
-    const std::vector<PersonajeNoJugable*>& personajes;
-    const std::vector<ObjetoDelEscenario*>& objetos;
-    bool esDeNoche;
-    int numeroDeSerieDelPersonajeInteractuado;
-};
-
-enum class EstadoDeLaMision {
-    EnEsperaPorPasoAnterior,
-    ActivaEnCurso,
-    CompletadaConExito
+enum class EstadoDeMision : uint8_t {
+    NoIniciada = 0,
+    EnProgreso = 1,
+    CompletadaConExito = 2,
+    Fallida = 3
 };
 ```
 
-### Declaracion de Clase Madre Abstracta `MisionBase`
+## 4. DECLARACIÓN COMPLETA DE LA CLASE
 ```cpp
 class MisionBase {
-protected:
-    int codigoDeLaMision;
-    int pasoDeUbicacionCorrespondiente;
-    QString tituloParaLaLibreta;
-    QString textoDeLaPistaParaLaLibreta;
-    EstadoDeLaMision estadoActual;
-    std::vector<EfectoDeMisionEnElMundo> listaDeEfectosAlIniciar;
-    std::vector<EfectoDeMisionEnElMundo> listaDeEfectosAlCompletar;
-
 public:
-    MisionBase(int codigo, int paso, const QString& titulo);
+    MisionBase(
+        int identificadorUnico,
+        TipoDeMision tipo,
+        std::string tituloDescriptivo,
+        std::string descripcionDetallada,
+        int recompensaDePuntaje
+    );
+
     virtual ~MisionBase() = default;
 
-    virtual void prepararMision(AzarConSemilla& azar, const Mapa& mapa) = 0;
-    virtual bool evaluarCumplimientoEnCuadro(const SituacionActualDelMundo& situacion) = 0;
+    virtual void iniciar(MundoDeCartagena& mundo) = 0;
+    virtual void actualizar(MundoDeCartagena& mundo, float segundosTranscurridos) = 0;
+    virtual bool verificarCondicionDeCompletitud(MundoDeCartagena& mundo) = 0;
+    virtual void completar(MundoDeCartagena& mundo);
+    virtual void reiniciar() = 0;
 
-    void finalizarYMarcarComoCompletada();
+    int obtenerIdentificadorUnico() const;
+    TipoDeMision obtenerTipoDeMision() const;
+    EstadoDeMision obtenerEstadoDeMision() const;
+    const std::string& obtenerTituloDescriptivo() const;
+    const std::string& obtenerDescripcionDetallada() const;
+    int obtenerRecompensaDePuntaje() const;
 
-    int obtenerCodigoDeLaMision() const;
-    int obtenerPasoDeUbicacionCorrespondiente() const;
-    QString obtenerTituloParaLaLibreta() const;
-    QString obtenerTextoDeLaPistaParaLaLibreta() const;
-    void establecerTextoDeLaPistaParaLaLibreta(const QString& texto);
+    bool estaCompletada() const;
+    bool estaEnProgreso() const;
 
-    EstadoDeLaMision obtenerEstadoActual() const;
-    void establecerEstadoActual(EstadoDeLaMision nuevoEstado);
+protected:
+    void cambiarEstado(EstadoDeMision nuevoEstado);
 
-    const std::vector<EfectoDeMisionEnElMundo>& obtenerListaDeEfectosAlIniciar() const;
-    const std::vector<EfectoDeMisionEnElMundo>& obtenerListaDeEfectosAlCompletar() const;
-
-    void agregarEfectoAlIniciar(const EfectoDeMisionEnElMundo& efecto);
-    void agregarEfectoAlCompletar(const EfectoDeMisionEnElMundo& efecto);
+    int identificadorUnico;
+    TipoDeMision tipo;
+    EstadoDeMision estado;
+    std::string tituloDescriptivo;
+    std::string descripcionDetallada;
+    int recompensaDePuntaje;
 };
-
-#endif
 ```
 
----
+## 5. INVARIANTES DE CLASE Y REGLAS DE NEGOCIO
+1. El `identificadorUnico` debe ser estrictamente positivo (> 0).
+2. La transición de estados debe seguir un flujo unidireccional por instancia:
+   - `NoIniciada` -> `EnProgreso` -> `CompletadaConExito` o `Fallida`.
+3. `completar(MundoDeCartagena& mundo)` marca el estado como `CompletadaConExito` y garantiza que no se procese doble recompensa en `Caso`.
+4. Los métodos no asignan memoria dinámica en cada ciclo de actualización.
 
-## Archivo de Implementacion: `mision.cpp`
+## 6. LÓGICA PASO A PASO DE IMPLEMENTACIÓN
+### `MisionBase::MisionBase`
+Asigna los miembros por lista de inicialización. Inicializa `estado` en `EstadoDeMision::NoIniciada`.
 
-### Inclusiones requeridas
-```cpp
-#include "investigacion/misiones/mision.h"
-```
+### `MisionBase::completar`
+1. Verifica que `estado == EstadoDeMision::EnProgreso`. Si no lo está, retorna de inmediato.
+2. Invoca `cambiarEstado(EstadoDeMision::CompletadaConExito)`.
+3. Notifica al mundo o registra la finalización en el historial del caso correspondiente.
 
-### Implementacion de Metodos
-
-#### 1. Constructor
-- `codigoDeLaMision = codigo;`
-- `pasoDeUbicacionCorrespondiente = paso;`
-- `tituloParaLaLibreta = titulo;`
-- `estadoActual = EstadoDeLaMision::EnEsperaPorPasoAnterior;`
-
-#### 2. `finalizarYMarcarComoCompletada`
-- `estadoActual = EstadoDeLaMision::CompletadaConExito;`
+### `MisionBase::cambiarEstado`
+Asigna el nuevo estado protegiendo la variable de transiciones inválidas.

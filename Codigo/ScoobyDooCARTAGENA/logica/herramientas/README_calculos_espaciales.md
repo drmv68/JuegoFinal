@@ -1,53 +1,43 @@
 # ESPECIFICACION TECNICA: calculos_espaciales.h / calculos_espaciales.cpp
 
-## Archivo de Cabecera: `calculos_espaciales.h`
+## Archivo y Ubicacion
+`logica/herramientas/calculos_espaciales.h`
+`logica/herramientas/calculos_espaciales.cpp`
 
-### Guardas de inclusion
+## Proposito y Responsabilidad Unica
+Provee funciones matematicas puras, acotamientos y calculos geometricos vectoriales en la cuadricula logica 2D sin realizar asignaciones dinamicas.
+
+## Dependencias
+### Para calculos_espaciales.h
+- `#include <cmath>`
+- `#include <algorithm>`
+- `#include "herramientas/tipos_espaciales.h"`
+
+### Para calculos_espaciales.cpp
+- `#include "herramientas/calculos_espaciales.h"`
+
+## Definicion Exacta de Cabecera (calculos_espaciales.h)
+
 ```cpp
 #ifndef CALCULOS_ESPACIALES_H
 #define CALCULOS_ESPACIALES_H
-```
 
-### Inclusiones requeridas
-```cpp
 #include <cmath>
-#include "mapa/mapa.h"
-#include "personajes/elemento_del_mapa.h"
-```
+#include <algorithm>
+#include "herramientas/tipos_espaciales.h"
 
-### Constantes matematicas constexpr
-```cpp
 namespace CalculosEspaciales {
-    constexpr double PI_EXACTO = 3.14159265358979323846;
-    constexpr double MEDIO_PI = 1.57079632679489661923;
-}
-```
+    constexpr double constantePi = 3.14159265358979323846;
+    constexpr double constanteDosPi = 6.28318530717958647692;
+    constexpr double constanteMedioPi = 1.57079632679489661923;
+    constexpr double toleranciaDistanciaCero = 0.000001;
 
-### Estructuras
-```cpp
-struct RectanguloVision {
-    double limiteIzquierdoX;
-    double limiteSuperiorY;
-    double limiteDerechoX;
-    double limiteInferiorY;
-};
-```
-
-### Declaraciones en Namespace `CalculosEspaciales`
-```cpp
-namespace CalculosEspaciales {
     inline double mantenerValorDentroDelRango(double valorActual, double valorMinimoPermitido, double valorMaximoPermitido) {
-        if (valorActual < valorMinimoPermitido) {
-            return valorMinimoPermitido;
-        }
-        if (valorActual > valorMaximoPermitido) {
-            return valorMaximoPermitido;
-        }
-        return valorActual;
+        return std::clamp(valorActual, valorMinimoPermitido, valorMaximoPermitido);
     }
 
     inline double obtenerValorSinSigno(double valor) {
-        return (valor < 0.0) ? -valor : valor;
+        return std::fabs(valor);
     }
 
     inline double calcularDistanciaAlCuadrado(double origenX, double origenY, double destinoX, double destinoY) {
@@ -57,7 +47,7 @@ namespace CalculosEspaciales {
     }
 
     inline double calcularDistanciaEnUnEje(double coordenadaA, double coordenadaB) {
-        return obtenerValorSinSigno(coordenadaA - coordenadaB);
+        return std::fabs(coordenadaA - coordenadaB);
     }
 
     CoordenadaCasilla convertirPosicionACasilla(double posicionX, double posicionY);
@@ -65,47 +55,40 @@ namespace CalculosEspaciales {
     bool estaPuntoDentroDelConoDeVision(double origenX, double origenY, DireccionMirada direccionMirada, double objetivoX, double objetivoY, double aperturaDelConoEnRadianes);
     bool estaPuntoDentroDelRectangulo(double puntoX, double puntoY, const RectanguloVision& rectangulo);
 }
+
+#endif
 ```
 
----
+## Algoritmo Paso a Paso (calculos_espaciales.cpp)
 
-## Archivo de Implementacion: `calculos_espaciales.cpp`
+### convertirPosicionACasilla(double posicionX, double posicionY)
+1. Obtener la componente entera inferior de `posicionX` mediante `std::floor(posicionX)`.
+2. Convertir el resultado a `int` y asignarlo a `columnaCasilla`.
+3. Obtener la componente entera inferior de `posicionY` mediante `std::floor(posicionY)`.
+4. Convertir el resultado a `int` y asignarlo a `filaCasilla`.
+5. Retornar `CoordenadaCasilla{ columnaCasilla, filaCasilla }`.
 
-### Inclusiones requeridas
-```cpp
-#include "herramientas/calculos_espaciales.h"
-```
+### calcularAnguloEntrePuntosEnRadianes(double origenX, double origenY, double destinoX, double destinoY)
+1. Calcular `diferenciaX = destinoX - origenX`.
+2. Calcular `diferenciaY = destinoY - origenY`.
+3. Retornar `std::atan2(diferenciaY, diferenciaX)`.
 
-### Implementacion de Funciones
+### estaPuntoDentroDelConoDeVision(double origenX, double origenY, DireccionMirada direccionMirada, double objetivoX, double objetivoY, double aperturaDelConoEnRadianes)
+1. Calcular el vector desplazamiento: `vectorHaciaObjetivoX = objetivoX - origenX` y `vectorHaciaObjetivoY = objetivoY - origenY`.
+2. Calcular la distancia al cuadrado: `distanciaAlCuadrado = (vectorHaciaObjetivoX * vectorHaciaObjetivoX) + (vectorHaciaObjetivoY * vectorHaciaObjetivoY)`.
+3. Si `distanciaAlCuadrado < toleranciaDistanciaCero`, retornar `true` (el objetivo coincide con el origen del observador).
+4. Calcular la magnitud real: `distanciaReal = std::sqrt(distanciaAlCuadrado)`.
+5. Normalizar el vector desplazamiento dividiendo cada componente por `distanciaReal`.
+6. Obtener el vector unitario de la direccion observada segun `direccionMirada`:
+   - Para `DireccionMirada::Este`: `vectorDireccionX = 1.0`, `vectorDireccionY = 0.0`.
+   - Para `DireccionMirada::Sur`: `vectorDireccionX = 0.0`, `vectorDireccionY = 1.0`.
+   - Para `DireccionMirada::Oeste`: `vectorDireccionX = -1.0`, `vectorDireccionY = 0.0`.
+   - Para `DireccionMirada::Norte`: `vectorDireccionX = 0.0`, `vectorDireccionY = -1.0`.
+7. Calcular el producto punto: `productoPunto = (vectorHaciaObjetivoX * vectorDireccionX) + (vectorHaciaObjetivoY * vectorDireccionY)`.
+8. Calcular el umbral angular minimo: `cosenoUmbralMinimo = std::cos(aperturaDelConoEnRadianes * 0.5)`.
+9. Retornar `productoPunto >= cosenoUmbralMinimo`.
 
-#### 1. `convertirPosicionACasilla`
-- **Firma:** `CoordenadaCasilla CalculosEspaciales::convertirPosicionACasilla(double posicionX, double posicionY)`
-- **Logica:**
-  - `int columnaCalculada = static_cast<int>(std::floor(posicionX));`
-  - `int filaCalculada = static_cast<int>(std::floor(posicionY));`
-  - Retorna `CoordenadaCasilla{ columnaCalculada, filaCalculada };`
-
-#### 2. `calcularAnguloEntrePuntosEnRadianes`
-- **Firma:** `double CalculosEspaciales::calcularAnguloEntrePuntosEnRadianes(double origenX, double origenY, double destinoX, double destinoY)`
-- **Logica:**
-  - `double diferenciaX = destinoX - origenX;`
-  - `double diferenciaY = destinoY - origenY;`
-  - Retorna `std::atan2(diferenciaY, diferenciaX);`
-
-#### 3. `estaPuntoDentroDelConoDeVision`
-- **Firma:** `bool CalculosEspaciales::estaPuntoDentroDelConoDeVision(double origenX, double origenY, DireccionMirada direccionMirada, double objetivoX, double objetivoY, double aperturaDelConoEnRadianes)`
-- **Logica:**
-  - Determinar angulo central segun direccion:
-    - Caso `DireccionMirada::Este`: `anguloCentral = 0.0;`
-    - Caso `DireccionMirada::Sur`: `anguloCentral = MEDIO_PI;`
-    - Caso `DireccionMirada::Oeste`: `anguloCentral = PI_EXACTO;`
-    - Caso `DireccionMirada::Norte`: `anguloCentral = -MEDIO_PI;`
-  - `double anguloHaciaObjetivo = calcularAnguloEntrePuntosEnRadianes(origenX, origenY, objetivoX, objetivoY);`
-  - `double diferenciaAngular = std::atan2(std::sin(anguloHaciaObjetivo - anguloCentral), std::cos(anguloHaciaObjetivo - anguloCentral));`
-  - `double diferenciaSinSigno = obtenerValorSinSigno(diferenciaAngular);`
-  - Retorna `diferenciaSinSigno <= (aperturaDelConoEnRadianes / 2.0);`
-
-#### 4. `estaPuntoDentroDelRectangulo`
-- **Firma:** `bool CalculosEspaciales::estaPuntoDentroDelRectangulo(double puntoX, double puntoY, const RectanguloVision& rectangulo)`
-- **Logica:**
-  - Retorna `(puntoX >= rectangulo.limiteIzquierdoX && puntoX <= rectangulo.limiteDerechoX && puntoY >= rectangulo.limiteSuperiorY && puntoY <= rectangulo.limiteInferiorY);`
+### estaPuntoDentroDelRectangulo(double puntoX, double puntoY, const RectanguloVision& rectangulo)
+1. Evaluar si `puntoX >= rectangulo.limiteIzquierdoX` y `puntoX <= rectangulo.limiteDerechoX`.
+2. Evaluar si `puntoY >= rectangulo.limiteSuperiorY` y `puntoY <= rectangulo.limiteInferiorY`.
+3. Retornar `true` si ambas evaluaciones son verdaderas; en caso contrario retornar `false`.

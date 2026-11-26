@@ -1,246 +1,163 @@
-# ESPECIFICACION TECNICA: controlador_del_juego.h / controlador_del_juego.cpp
+# ESPECIFICACIÓN TÉCNICA DE BAJO NIVEL: CONTROLADOR DEL JUEGO
 
-## Archivo de Cabecera: `controlador_del_juego.h`
+## 1. PROPÓSITO ARQUITECTÓNICO Y ROL EN EL SISTEMA
+La clase `ControladorDelJuego` hereda de `QObject` y actúa como el orquestador central de la capa lógica. Su responsabilidad es coordinar el bucle temporal maestro mediante un único `QTimer` de 16 ms (~60 FPS), gestionar la máquina de estados de alto nivel (`EtapaDelJuego`), traducir la entrada del usuario (`GestorDeTeclado`), coordinar el `MundoDeCartagena`, avanzar el `Caso` de investigación activo, gestionar el `PerfilDeUsuario` y emitir señales Qt a la capa de presentación (GUI/Audio).
 
-### Guardas de inclusion
+No realiza rendering ni manipula widgets; mantiene desacoplada la simulación y garantiza la estabilidad del sistema capturando excepciones de inicialización o carga de archivos.
+
+## 2. INCLUSIONES Y DEPENDENCIAS ESTRICTAS
 ```cpp
-#ifndef CONTROLADOR_DEL_JUEGO_H
-#define CONTROLADOR_DEL_JUEGO_H
-```
+#pragma once
 
-### Inclusiones requeridas
-```cpp
 #include <QObject>
 #include <QTimer>
-#include <QElapsedTimer>
-#include <vector>
-#include <QString>
-#include <QHash>
-#include <QJsonObject>
+#include <memory>
 
+#include "juego/etapa_del_juego.h"
 #include "juego/teclado.h"
 #include "juego/dificultad.h"
 #include "juego/recursos_de_la_partida.h"
 #include "juego/reloj_dia_noche.h"
-#include "mapa/mapa.h"
-#include "mapa/cargador_de_niveles.h"
-#include "personajes/scooby.h"
-#include "personajes/personaje_no_jugable.h"
-#include "personajes/objeto_del_escenario.h"
-#include "personajes/trampa.h"
-#include "investigacion/caso.h"
-#include "investigacion/acusacion.h"
-#include "inteligencia/avisos_entre_agentes.h"
-#include "herramientas/azar_con_semilla.h"
 #include "guardado/perfil.h"
 #include "guardado/gestor_de_guardado.h"
+#include "mapa/mundo_de_cartagena.h"
+#include "investigacion/caso.h"
 ```
 
-### Enumeraciones de Estados y Eventos Visuales
-```cpp
-enum class EtapaDelJuego {
-    MenuPrincipal,
-    TutorialNivelUno,
-    ExploracionNivelDos,
-    ClimaxTrampaArmada,
-    Pausa,
-    Derrota,
-    Victoria
-};
-
-enum class TipoDeEventoVisual {
-    ObjetoRecogido,
-    PistaDescubierta,
-    MisionCompletada,
-    ScoobyRalentizado,
-    AlertaGlobalActivada,
-    CanonDisparado,
-    CanonImpactoCercano,
-    TrampaArmada,
-    CambioDeMomentoDelDia,
-    AcusacionAcertada,
-    AcusacionFallida,
-    ScoobyCapturado,
-    VillanoAtrapado
-};
-```
-
-### Declaracion de Clase `ControladorDelJuego`
+## 3. DECLARACIÓN COMPLETA DE LA CLASE
 ```cpp
 class ControladorDelJuego : public QObject {
     Q_OBJECT
-
-private:
-    EtapaDelJuego etapaActual;
-    EtapaDelJuego etapaAntesDeLaPausa;
-    QTimer* relojDeCuadros;
-    QElapsedTimer cronometroDeCuadros;
-    EstadoDeTeclado ultimoEstadoDeTeclado;
-
-    // Punteros dueños de la logica
-    Mapa* mapa;
-    Scooby* scooby;
-    std::vector<PersonajeNoJugable*> personajes;
-    std::vector<ObjetoDelEscenario*> objetos;
-    Trampa* trampa;
-    Caso* casoActivo;
-    Acusacion* acusacion;
-    RelojDiaNoche* relojDiaNoche;
-    RecursosDeLaPartida* recursos;
-
-    // Instancias directas
-    BuzonCompartidoDeAvisos buzonDeAvisos;
-    AzarConSemilla azar;
-    ParametrosDeDificultad parametros;
-    PerfilDeUsuario perfil;
-    GestorDeGuardado gestorDeGuardado;
-    DatosInicialesDelNivel datosDelNivel;
-    QHash<QString, QJsonObject> dialogosPorPersonaje;
-    int derrotasSeguidas;
-    double segundosParaElProximoComodin;
-    double segundosParaElProximoDisparoDeCanon;
-
-    void liberarMemoriaDeNivel();
-    void cargarNivel(int numeroDeNivel);
-    void resolverColisiones();
-    void resolverInteracciones();
-    void aplicarEfectoDeMision(const EfectoDeMisionEnElMundo& efecto);
-    void generarComodinCercanoAScooby();
-    void dispararCanonSiCorresponde(double segundosTranscurridos);
-    void iniciarClimax();
-    void pasarDelNivelUnoAlNivelDos();
-    RectanguloVision armarVistaDeScooby() const;
-    void evaluarReglasDeFinDePartida();
-    void terminarPartida(bool fueVictoria, const QString& motivo);
-    void cambiarEtapa(EtapaDelJuego nuevaEtapa);
-
-private slots:
-    void ejecutarBuclePrincipal();
 
 public:
     explicit ControladorDelJuego(QObject* padre = nullptr);
     ~ControladorDelJuego() override;
 
-    void iniciarPartida(int numeroDeNivel, NivelDeDificultad dificultad, unsigned int semillaManual = 0);
-    void procesarEntradaTeclado(const EstadoDeTeclado& teclado);
-    void pausarPartida();
-    void reanudarPartida();
-    void acusarASospechoso(int indiceDelSospechoso);
-    void responderAcertijo(int indiceDeLaOpcion);
-    void gastarGemaEnAcertijo();
-    void cerrarConversacion();
-    void guardarPerfilAlSalir();
+    ControladorDelJuego(const ControladorDelJuego&) = delete;
+    ControladorDelJuego& operator=(const ControladorDelJuego&) = delete;
 
-    // Consultas const para la interfaz
-    const Mapa* obtenerMapa() const;
-    const Scooby* obtenerScooby() const;
-    const std::vector<PersonajeNoJugable*>& obtenerPersonajes() const;
-    const std::vector<ObjetoDelEscenario*>& obtenerObjetos() const;
-    const Trampa* obtenerTrampa() const;
-    const Caso* obtenerCaso() const;
-    const RelojDiaNoche* obtenerReloj() const;
-    const RecursosDeLaPartida* obtenerRecursos() const;
-    const PerfilDeUsuario& obtenerPerfil() const;
+    void iniciarSistemaCompleto();
+    void cargarONuevoPerfil(const QString& nombreDetective);
+
+    void iniciarNuevaPartida(int nivelDeMapa, NivelDeDificultad dificultad);
+    void pausarJuego();
+    void reanudarJuego();
+    void reiniciarNivelActual();
+
+    void procesarPresionDeTecla(int codigoDeTeclaQt);
+    void procesarLiberacionDeTecla(int codigoDeTeclaQt);
+
+    ResultadoDeAcusacion emitirAcusacionContraSospechoso(int identificadorSospechoso);
+
     EtapaDelJuego obtenerEtapaActual() const;
+    const MundoDeCartagena* obtenerMundo() const;
+    const Caso* obtenerCasoActivo() const;
+    const PerfilDeUsuario& obtenerPerfil() const;
+    const RecursosDeLaPartida& obtenerRecursos() const;
+    const RelojDiaNoche& obtenerReloj() const;
 
 signals:
-    void alCambiarEtapa(EtapaDelJuego etapaNueva);
-    void alActualizarRecursos();
-    void alOcurrirEventoVisual(TipoDeEventoVisual evento, int numeroDeSerie);
-    void alCambiarMomentoDelDia(bool esDeNoche);
-    void alIniciarConversacion(QString nombre, QString claveDeRetrato, QString mensaje);
-    void alIniciarAcertijo(int codigoDeLaMision);
-    void alAnotarEnLibreta(QString texto, bool esRumorSinConfirmar);
-    void alTacharSospechoso(int indiceDelSospechoso);
-    void alTerminarPartida(bool fueVictoria, QString motivo);
+    void alActualizarFotogramaLogico();
+    void alCambiarEtapaDelJuego(EtapaDelJuego nuevaEtapa);
+    void alModificarRecursos();
+    void alCompletarMision(int identificadorMision, const QString& titulo);
+    void alResolverCasoExitosamente(int numeroDeCaso);
+    void alPerderPartidaPorCaptura();
+    void alOcurrirErrorCritico(const QString& mensajeError);
+    void alDispararEventoVisual(TipoDeEventoVisual tipoEvento, float posicionX, float posicionY);
+
+private slots:
+    void ejecutarPasoDeSimulacion();
+
+private:
+    void cambiarEtapa(EtapaDelJuego nuevaEtapa);
+    void actualizarLogicaDeJuego(float segundosTranscurridos);
+    void verificarCondicionesDeVictoriaODerrota();
+    void guardarProgresoAutomatico();
+
+    QTimer temporizadorMaestro;
+    EtapaDelJuego etapaActual;
+    NivelDeDificultad dificultadActual;
+    int nivelDeMapaActual;
+
+    GestorDeTeclado gestorDeTeclado;
+    RecursosDeLaPartida recursos;
+    RelojDiaNoche reloj;
+    PerfilDeUsuario perfilActivo;
+    GestorDeGuardado gestorDeGuardado;
+
+    std::unique_ptr<MundoDeCartagena> mundo;
+    std::unique_ptr<Caso> casoActivo;
 };
-
-#endif
 ```
 
----
-
-## Archivo de Implementacion: `controlador_del_juego.cpp`
-
-### Inclusiones requeridas
+## 4. CONSTANTES DE TIEMPO Y CONFIGURACIÓN
 ```cpp
-#include "juego/controlador_del_juego.h"
-#include "inteligencia/cerebro_ciudadano_y_amigo.h"
-#include "inteligencia/cerebro_secuaz.h"
-#include "inteligencia/cerebro_villano.h"
-#include "fisicas/movimiento_circular.h"
-#include "fisicas/pendulo_amortiguado.h"
-#include "fisicas/tiro_parabolico.h"
-#include "herramientas/calculos_espaciales.h"
+namespace ConstantesControlador {
+    inline constexpr int INTERVALO_TEMPORIZADOR_MS = 16;
+    inline constexpr float DELTA_TIEMPO_SEGUNDOS = 0.016666667f;
+}
 ```
 
-### Implementacion de Metodos
+## 5. INVARIANTES DE CLASE Y REGLAS DE NEGOCIO
+1. **Un solo temporizador maestro:** La simulación se ejecuta estrictamente a razón de un tick de ~16 ms conectado a `ejecutarPasoDeSimulacion()`. Ningún otro componente de lógica crea temporizadores paralelos.
+2. **Propiedad clara:** El `ControladorDelJuego` es el dueño absoluto de `MundoDeCartagena` y `Caso` mediante `std::unique_ptr`. Al cambiar de nivel o reiniciar, los objetos previos son destruidos ordenadamente antes de instanciar los nuevos.
+3. **Manejo defensivo de excepciones:** Todo proceso de lectura de archivos (`CargadorDeNiveles::cargarNivel`, `GestorDeGuardado::cargarPerfil`) se ejecuta dentro de bloques `try / catch`. Si ocurre un fallo, no se produce aborto del proceso; se emite `alOcurrirErrorCritico` y se transiciona a un estado seguro (`EtapaDelJuego::MenuPrincipal`).
+4. **Desacoplamiento GUI:** No existen includes de `QWidget`, `QPainter` ni llamadas gráficas en este archivo. Toda comunicación hacia la vista se realiza mediante las señales de Qt declaradas.
 
-#### 1. Constructor
-- Inicializa punteros en `nullptr`, `etapaActual = EtapaDelJuego::MenuPrincipal`, `derrotasSeguidas = 0`.
-- Crea temporizador de cuadros:
-  - `relojDeCuadros = new QTimer(this);`
-  - `connect(relojDeCuadros, &QTimer::timeout, this, &ControladorDelJuego::ejecutarBuclePrincipal);`
-- Carga perfil con `gestorDeGuardado.cargarPerfilDesdeDisco(perfil);`
+## 6. LÓGICA PASO A PASO DE IMPLEMENTACIÓN
+### `ControladorDelJuego::ControladorDelJuego`
+1. Conecta `temporizadorMaestro.timeout` con el slot `ejecutarPasoDeSimulacion`.
+2. Establece `etapaActual = EtapaDelJuego::Cargando`.
+3. Configura `temporizadorMaestro.setInterval(ConstantesControlador::INTERVALO_TEMPORIZADOR_MS)`.
 
-#### 2. Destructor
-- Detiene `relojDeCuadros`.
-- Llama a `liberarMemoriaDeNivel()`.
+### `iniciarNuevaPartida`
+1. Detiene `temporizadorMaestro`.
+2. Asigna `nivelDeMapaActual = nivelDeMapa` y `dificultadActual = dificultad`.
+3. Configura `recursos.reiniciarConVidas(ConfiguracionDeDificultad::obtenerVidasIniciales(dificultad))`.
+4. Obtiene parámetros de dificultad y configura las duraciones de `reloj`.
+5. En un bloque `try / catch`:
+   - Crea `mundo = std::make_unique<MundoDeCartagena>()`.
+   - Invoca `mundo->cargarNivel(nivelDeMapaActual, dificultadActual)`.
+   - Instancia y configura `casoActivo` para el nivel correspondiente.
+   - Invoca `casoActivo->iniciar(*mundo)`.
+   - Cambia la etapa a `EtapaDelJuego::JugandoPartidaNormal`.
+   - Inicia `temporizadorMaestro.start()`.
+6. En el bloque `catch`:
+   - Emite `alOcurrirErrorCritico("Error al cargar los recursos del mapa o nivel.")`.
+   - Cambia la etapa a `EtapaDelJuego::MenuPrincipal`.
 
-#### 3. `liberarMemoriaDeNivel`
-- Libera con `delete`: `mapa`, `scooby`, `trampa`, `casoActivo`, `acusacion`, `relojDiaNoche`, `recursos`.
-- Libera vectores:
-  - `for (auto p : personajes) delete p; personajes.clear();`
-  - `for (auto o : objetos) delete o; objetos.clear();`
+### `ejecutarPasoDeSimulacion`
+1. Si `etapaActual != EtapaDelJuego::JugandoPartidaNormal` y `etapaActual != EtapaDelJuego::ConfrontacionFinalConVillano`:
+   - Retorna (el juego se encuentra pausado o en menú).
+2. Si `gestorDeTeclado.obtenerEstadoActual().pausarPulsado`:
+   - Invoca `pausarJuego()`.
+   - `gestorDeTeclado.limpiarPulsacionesInstantaneas()`.
+   - Retorna.
+3. Invoca `actualizarLogicaDeJuego(ConstantesControlador::DELTA_TIEMPO_SEGUNDOS)`.
+4. `gestorDeTeclado.limpiarPulsacionesInstantaneas()`.
+5. Emite `alActualizarFotogramaLogico()`.
 
-#### 4. `iniciarPartida`
-- Llama a `liberarMemoriaDeNivel()`.
-- Inicializa semilla en `azar` (manual si `semillaManual != 0`, sino del sistema).
-- Obtiene parametros de `Dificultad::obtenerParametros(dificultad)`.
-- Aplica asistencia por derrotas `Dificultad::aplicarAsistenciaPorDerrotas(parametros, derrotasSeguidas)`.
-- Instancia `mapa`, `relojDiaNoche`, `recursos`, `acusacion`, `casoActivo`.
-- Llama a `cargarNivel(numeroDeNivel)`.
-- Inicia reloj a 16 ms: `cronometroDeCuadros.start(); relojDeCuadros->start(16);`
-- Cambia etapa a `TutorialNivelUno` si nivel 1, o `ExploracionNivelDos` si nivel 2.
+### `actualizarLogicaDeJuego`
+1. `reloj.actualizar(segundosTranscurridos)`.
+2. `mundo->actualizar(segundosTranscurridos, gestorDeTeclado.obtenerEstadoActual())`.
+3. `casoActivo->actualizar(*mundo, segundosTranscurridos)`.
+4. `perfilActivo.acumularTiempoJugado(segundosTranscurridos)`.
+5. Verifica colisiones de Scooby con objetos y enemigos mediante `mundo`.
+6. Verifica condiciones de victoria o derrota.
 
-#### 5. `ejecutarBuclePrincipal`
-- Mide tiempo real con `cronometroDeCuadros.restart() / 1000.0`.
-- Acota tiempo a maximo 0.05 s: `double dt = CalculosEspaciales::mantenerValorDentroDelRango(segundos, 0.0, 0.05);`
-- Si la etapa es `MenuPrincipal, Pausa, Derrota, Victoria`: retorna sin calcular logica.
-- 1. Mueve a Scooby con `scooby->moverSegunTeclado(ultimoEstadoDeTeclado, dt, *mapa);`
-- 2. Avanza reloj: `bool cambioDiaNoche = relojDiaNoche->avanzarTiempo(dt);` Si cambio, emite `alCambiarMomentoDelDia(relojDiaNoche->esDeNoche())`.
-- 3. En Nivel 2: avanza consumo de provisiones en `recursos` (aplica robo si es de noche y villano activo).
-- 4. Descuenta vigencia de avisos en `buzonDeAvisos.descontarTiempoDeVigencia(dt);`
-- 5. Para cada personaje activo: llama a `pensarYActuar`, luego `avanzarUnCuadro`.
-- 6. Para cada objeto activo: llama a `avanzarUnCuadro`.
-- 7. Resuelve colisiones: `resolverColisiones();`
-- 8. Resuelve interacciones: `resolverInteracciones();`
-- 9. Evalua misiones:
-  - `auto efectos = casoActivo->evaluarProgresoDeMisionesEnCuadro(situacion);`
-  - Ejecuta cada efecto devuelto con `aplicarEfectoDeMision`.
-- 10. Si Nivel 1 y misiones completadas: llama a `pasarDelNivelUnoAlNivelDos()`.
-- 11. Generador de comodines (cada 40 a 120 s) y cañonazos nocturnos.
-- 12. Revisa trampa: `trampa->revisarSiScoobyOElVillanoPisanLaZona(*scooby, *villano);`
-- 13. Evalua reglas de fin: `evaluarReglasDeFinDePartida();`
-- 14. Limpia `ultimoEstadoDeTeclado.limpiarPulsacionReciente();`
-
-#### 6. `evaluarReglasDeFinDePartida`
-- Derrota si:
-  - `relojDiaNoche->seAcaboElTiempo()` -> motivo: "Se agoto el tiempo de la investigacion."
-  - `recursos->estanProvisionesAgotadas()` -> motivo: "Las provisiones del castillo se han agotado."
-  - `trampa->obtenerScoobyCayoEnLaTrampa()` -> motivo: "Scooby cayo en su propia trampa."
-  - Toque letal de villano o secuaz en modo alerta -> motivo: "Scooby fue capturado por los guardias del asedio."
-- Victoria si:
-  - `trampa->obtenerVillanoCayoEnLaTrampa()` -> motivo: "¡El fantasma ha caido en la trampa!"
-
-#### 7. `terminarPartida`
-- Detiene temporizadores.
-- Si fue victoria:
-  - `derrotasSeguidas = 0;`
-  - `perfil.casosResueltosTotales++;`
-  - Marca villano como desenmascarado.
-  - Actualiza mejor tiempo.
-- Si fue derrota:
-  - `derrotasSeguidas++;`
-- `gestorDeGuardado.guardarPerfilEnDisco(perfil);`
-- Cambia etapa a Victoria o Derrota y emite `alTerminarPartida(fueVictoria, motivo)`.
+### `emitirAcusacionContraSospechoso`
+1. Evalúa la acusación delegando en `casoActivo->evaluarAcusacionContraSospechoso(identificadorSospechoso)`.
+2. Si el resultado es `CulpableIdentificadoCorrectamente`:
+   - Suma puntaje mayor a `recursos` y `perfilActivo`.
+   - Registra caso resuelto en `perfilActivo`.
+   - Guarda automáticamente la partida con `gestorDeGuardado.guardarPerfil(perfilActivo)`.
+   - Cambia etapa a `EtapaDelJuego::CasoResueltoVictoria`.
+   - Emite `alResolverCasoExitosamente(casoActivo->obtenerNumeroDeCaso())`.
+3. Si el resultado es `InocenteAcusadoPenalizacion`:
+   - Aplica penalización de puntaje en `recursos` y resta una vida.
+   - Emite `alModificarRecursos()`.
+   - Si `recursos.estaSinVidas()`:
+     - Cambia etapa a `EtapaDelJuego::PartidaPerdidaPorAtrapado`.
+     - Emite `alPerderPartidaPorCaptura()`.
+4. Retorna el resultado de la acusación.

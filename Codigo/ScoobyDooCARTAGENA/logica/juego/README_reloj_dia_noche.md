@@ -1,120 +1,90 @@
-# ESPECIFICACION TECNICA: reloj_dia_noche.h / reloj_dia_noche.cpp
+# ESPECIFICACIÓN TÉCNICA DE BAJO NIVEL: RELOJ DÍA Y NOCHE
 
-## Archivo de Cabecera: `reloj_dia_noche.h`
+## 1. PROPÓSITO ARQUITECTÓNICO Y ROL EN EL SISTEMA
+La clase `RelojDiaNoche` gestiona la progresión del ciclo circadiano del juego en Cartagena de Indias. Calcula la transición suave de iluminación ambiental (de mediodía colonial a medianoche en las murallas) mediante interpolación lineal sin saltos bruscos. Notifica cambios de fase e influye directamente en el comportamiento de los personajes (comportamiento pacífico de día, patrullas y acecho de monstruos de noche).
 
-### Guardas de inclusion
+## 2. INCLUSIONES Y DEPENDENCIAS ESTRICTAS
 ```cpp
-#ifndef RELOJ_DIA_NOCHE_H
-#define RELOJ_DIA_NOCHE_H
+#pragma once
+
+#include <cstdint>
 ```
 
-### Enumeracion de Momento
+## 3. ENUMERACIONES Y TIPOS
 ```cpp
-enum class MomentoDelDia {
-    Dia,
-    Noche
+enum class FaseDelDia : uint8_t {
+    Dia = 0,
+    Atardecer = 1,
+    Noche = 2,
+    Amanecer = 3
 };
 ```
 
-### Constantes constexpr
+## 4. DECLARACIÓN COMPLETA DE LA CLASE
 ```cpp
-namespace ConstantesReloj {
-    constexpr double DURACION_TRANSICION_LUZ_SEGUNDOS = 5.0;
+class RelojDiaNoche {
+public:
+    RelojDiaNoche();
+    RelojDiaNoche(float duracionDiaSegundos, float duracionNocheSegundos);
+    ~RelojDiaNoche() = default;
+
+    void actualizar(float segundosTranscurridos);
+    void reiniciar();
+
+    void configurarDuraciones(float duracionDiaSegundos, float duracionNocheSegundos);
+
+    FaseDelDia obtenerFaseActual() const;
+    float obtenerFactorDeIluminacionAmbiental() const;
+    float obtenerTiempoTranscurridoEnCiclo() const;
+    float obtenerDuracionTotalDelCiclo() const;
+    bool esDeNoche() const;
+
+private:
+    void calcularFaseEIluminacion();
+
+    float duracionDia;
+    float duracionTransicion;
+    float duracionNoche;
+    float tiempoAcumuladoEnCiclo;
+
+    FaseDelDia faseActual;
+    float factorDeIluminacion;
+};
+```
+
+## 5. CONSTANTES Y CURVA DE ILUMINACIÓN
+```cpp
+namespace ConstantesRelojDiaNoche {
+    inline constexpr float ILUMINACION_MAXIMA_DIA = 1.0f;
+    inline constexpr float ILUMINACION_MINIMA_NOCHE = 0.22f;
+    inline constexpr float DURACION_POR_DEFECTO_TRANSICION = 10.0f;
 }
 ```
 
-### Declaracion de Clase `RelojDiaNoche`
-```cpp
-class RelojDiaNoche {
-private:
-    double segundosRestantesTotales;
-    double duracionDelCicloDeDia;
-    double duracionDelCicloDeNoche;
-    double tiempoEnElCicloActual;
-    MomentoDelDia momentoActual;
-    double factorDeOscuridad;
-    bool cicloDiaNocheHabilitado;
+La curva se divide en cuatro segmentos continuos:
+1. `Dia`: Duración `duracionDia`. Iluminación fija en `1.0f`.
+2. `Atardecer`: Duración `duracionTransicion`. Interpolación lineal de `1.0f` a `0.22f`.
+3. `Noche`: Duración `duracionNoche`. Iluminación fija en `0.22f`.
+4. `Amanecer`: Duración `duracionTransicion`. Interpolación lineal de `0.22f` a `1.0f`.
 
-public:
-    RelojDiaNoche();
+## 6. LÓGICA PASO A PASO DE IMPLEMENTACIÓN
+### `actualizar`
+1. Incrementa `tiempoAcumuladoEnCiclo += segundosTranscurridos`.
+2. Calcula `duracionTotal = duracionDia + duracionTransicion + duracionNoche + duracionTransicion`.
+3. Si `tiempoAcumuladoEnCiclo >= duracionTotal`:
+   - `tiempoAcumuladoEnCiclo = std::fmod(tiempoAcumuladoEnCiclo, duracionTotal)`.
+4. Invoca `calcularFaseEIluminacion()`.
 
-    void reiniciar(double totalSegundos, double segundosDeDia, double segundosDeNoche, bool habilitarCiclo);
-    bool avanzarTiempo(double segundosTranscurridos);
-
-    void aplicarBonoDeTiempo(double segundosExtra);
-    void aplicarDescuentoDeTiempo(double segundosMenos);
-
-    bool esDeNoche() const;
-    double obtenerFactorDeOscuridad() const;
-    double obtenerSegundosRestantes() const;
-    MomentoDelDia obtenerMomentoActual() const;
-    bool seAcaboElTiempo() const;
-};
-
-#endif
-```
-
----
-
-## Archivo de Implementacion: `reloj_dia_noche.cpp`
-
-### Inclusiones requeridas
-```cpp
-#include "juego/reloj_dia_noche.h"
-#include "herramientas/calculos_espaciales.h"
-```
-
-### Implementacion de Metodos
-
-#### 1. Constructor
-- Inicializa variables en 0.0, `momentoActual = MomentoDelDia::Dia`, `factorDeOscuridad = 0.0`, `cicloDiaNocheHabilitado = false`.
-
-#### 2. `reiniciar`
-- `segundosRestantesTotales = totalSegundos;`
-- `duracionDelCicloDeDia = segundosDeDia;`
-- `duracionDelCicloDeNoche = segundosDeNoche;`
-- `tiempoEnElCicloActual = 0.0;`
-- `momentoActual = MomentoDelDia::Dia;`
-- `factorDeOscuridad = 0.0;`
-- `cicloDiaNocheHabilitado = habilitarCiclo;`
-
-#### 3. `avanzarTiempo`
-- `segundosRestantesTotales -= segundosTranscurridos;`
-- `if (segundosRestantesTotales < 0.0) segundosRestantesTotales = 0.0;`
-- Si `!cicloDiaNocheHabilitado`:
-  - `factorDeOscuridad = 0.0; momentoActual = MomentoDelDia::Dia;`
-  - Retorna `false;`
-- `tiempoEnElCicloActual += segundosTranscurridos;`
-- `bool huboCambioDeMomento = false;`
-- Evaluacion de cambio de ciclo:
-  - Si `momentoActual == MomentoDelDia::Dia`:
-    - Si `tiempoEnElCicloActual >= duracionDelCicloDeDia`:
-      - `momentoActual = MomentoDelDia::Noche;`
-      - `tiempoEnElCicloActual = 0.0;`
-      - `huboCambioDeMomento = true;`
-  - Si `momentoActual == MomentoDelDia::Noche`:
-    - Si `tiempoEnElCicloActual >= duracionDelCicloDeNoche`:
-      - `momentoActual = MomentoDelDia::Dia;`
-      - `tiempoEnElCicloActual = 0.0;`
-      - `huboCambioDeMomento = true;`
-- Interpolacion lineal de `factorDeOscuridad` en los ultimos 5.0 s de transicion:
-  - En Dia hacia Noche (ultimos 5 s de dia):
-    - `tiempoParaNoche = duracionDelCicloDeDia - tiempoEnElCicloActual;`
-    - Si `tiempoParaNoche <= ConstantesReloj::DURACION_TRANSICION_LUZ_SEGUNDOS`:
-      - `factorDeOscuridad = 1.0 - (tiempoParaNoche / ConstantesReloj::DURACION_TRANSICION_LUZ_SEGUNDOS);`
-    - Sino `factorDeOscuridad = 0.0;`
-  - En Noche hacia Dia (ultimos 5 s de noche):
-    - `tiempoParaDia = duracionDelCicloDeNoche - tiempoEnElCicloActual;`
-    - Si `tiempoParaDia <= ConstantesReloj::DURACION_TRANSICION_LUZ_SEGUNDOS`:
-      - `factorDeOscuridad = tiempoParaDia / ConstantesReloj::DURACION_TRANSICION_LUZ_SEGUNDOS;`
-    - Sino `factorDeOscuridad = 1.0;`
-- `factorDeOscuridad = CalculosEspaciales::mantenerValorDentroDelRango(factorDeOscuridad, 0.0, 1.0);`
-- Retorna `huboCambioDeMomento;`
-
-#### 4. `aplicarBonoDeTiempo` y `aplicarDescuentoDeTiempo`
-- `aplicarBonoDeTiempo`: `segundosRestantesTotales += segundosExtra;`
-- `aplicarDescuentoDeTiempo`: `segundosRestantesTotales -= segundosMenos; if (segundosRestantesTotales < 0.0) segundosRestantesTotales = 0.0;`
-
-#### 5. `esDeNoche`, `seAcaboElTiempo`
-- `esDeNoche`: retorna `momentoActual == MomentoDelDia::Noche;`
-- `seAcaboElTiempo`: retorna `segundosRestantesTotales <= 0.0;`
+### `calcularFaseEIluminacion`
+1. Límite 1 = `duracionDia`.
+   - Si `t < Limite 1`: `faseActual = FaseDelDia::Dia`, `factorDeIluminacion = 1.0f`.
+2. Límite 2 = `Limite 1 + duracionTransicion`.
+   - Si `t < Limite 2`: `faseActual = FaseDelDia::Atardecer`.
+   - Fracción normalizada `u = (t - Limite 1) / duracionTransicion`.
+   - `factorDeIluminacion = 1.0f - u * (1.0f - ILUMINACION_MINIMA_NOCHE)`.
+3. Límite 3 = `Limite 2 + duracionNoche`.
+   - Si `t < Limite 3`: `faseActual = FaseDelDia::Noche`, `factorDeIluminacion = ILUMINACION_MINIMA_NOCHE`.
+4. En cualquier otro caso (`t < duracionTotal`):
+   - `faseActual = FaseDelDia::Amanecer`.
+   - Fracción normalizada `u = (t - Limite 3) / duracionTransicion`.
+   - `factorDeIluminacion = ILUMINACION_MINIMA_NOCHE + u * (1.0f - ILUMINACION_MINIMA_NOCHE)`.

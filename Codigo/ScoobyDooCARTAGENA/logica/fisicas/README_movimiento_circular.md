@@ -1,46 +1,50 @@
 # ESPECIFICACION TECNICA: movimiento_circular.h / movimiento_circular.cpp
 
-## Archivo de Cabecera: `movimiento_circular.h`
+## Archivo y Ubicacion
+`logica/fisicas/movimiento_circular.h`
+`logica/fisicas/movimiento_circular.cpp`
 
-### Guardas de inclusion
+## Proposito y Responsabilidad Unica
+Calcula la trayectoria circular parametrica del centinela del almacen de provisiones mediante ecuaciones trigonometricas continuas, administrando pausas de observacion, interpolacion suave de radio y acotamiento de parametros para impedir derivas infinitas.
+
+## Dependencias
+### Para movimiento_circular.h
+- `#include "fisicas/movimiento.h"`
+- `#include "herramientas/azar_con_semilla.h"`
+
+### Para movimiento_circular.cpp
+- `#include "fisicas/movimiento_circular.h"`
+- `#include "herramientas/calculos_espaciales.h"`
+- `#include <cmath>`
+- `#include <cassert>`
+
+## Definicion Exacta de Cabecera (movimiento_circular.h)
+
 ```cpp
 #ifndef MOVIMIENTO_CIRCULAR_H
 #define MOVIMIENTO_CIRCULAR_H
-```
 
-### Inclusiones requeridas
-```cpp
 #include "fisicas/movimiento.h"
 #include "herramientas/azar_con_semilla.h"
-```
 
-### Constantes constexpr
-```cpp
-namespace ConstantesCircular {
-    constexpr double DURACION_PAUSA_CAMBIO_EN_SEGUNDOS = 0.8;
-    constexpr double TIEMPO_MINIMO_ENTRE_CAMBIOS_EN_SEGUNDOS = 6.0;
-    constexpr double TIEMPO_MAXIMO_ENTRE_CAMBIOS_EN_SEGUNDOS = 12.0;
-    constexpr double FACTOR_VARIACION_VELOCIDAD = 0.10;
-    constexpr double FACTOR_VARIACION_RADIO = 0.50;
-}
-```
-
-### Declaracion de Clase `MovimientoCircular`
-```cpp
-class MovimientoCircular : public MovimientoBase {
-private:
-    double centroDeGiroX;
-    double centroDeGiroY;
-    double radioActualEnCasillas;
-    double velocidadAngularEnRadianesPorSegundo;
-    double faseInicialEnRadianes;
-    int sentidoDeGiro;
-    double segundosParaElProximoCambio;
-    double segundosRestantesDePausa;
-    bool estaEnPausaDeCambio;
-
+class MovimientoCircular final : public MovimientoBase {
 public:
+    static constexpr double duracionPausaDeCambioEnSegundos = 0.8;
+    static constexpr double tiempoMinimoEntreCambiosEnSegundos = 6.0;
+    static constexpr double tiempoMaximoEntreCambiosEnSegundos = 12.0;
+    static constexpr double factorVariacionVelocidadAngular = 0.10;
+    static constexpr double incrementoRadioEnCasillas = 0.40;
+    static constexpr double radioMinimoPermitidoEnCasillas = 1.5;
+    static constexpr double radioMaximoPermitidoEnCasillas = 5.0;
+    static constexpr double velocidadAngularMinimaPermitida = 0.5;
+    static constexpr double velocidadAngularMaximaPermitida = 2.0;
+
     MovimientoCircular();
+    ~MovimientoCircular() override = default;
+
+    MovimientoCircular(const MovimientoCircular&) = delete;
+    MovimientoCircular& operator=(const MovimientoCircular&) = delete;
+
     void configurarParametrosCirculares(double centroX, double centroY, double radioInicial, double velocidadAngular);
     void reiniciarSimulacion() override;
     CoordenadaFisicaTresEjes avanzarYCalcularPosicion(double segundosDesdeElCuadroAnterior) override;
@@ -49,70 +53,69 @@ public:
     double obtenerRadioActualEnCasillas() const;
     double obtenerVelocidadAngularEnRadianesPorSegundo() const;
     bool obtenerEstaEnPausaDeCambio() const;
+
+private:
+    double centroDeGiroX;
+    double centroDeGiroY;
+    double radioActualEnCasillas;
+    double radioObjetivoEnCasillas;
+    double velocidadAngularEnRadianesPorSegundo;
+    double faseInicialEnRadianes;
+    int sentidoDeGiro;
+    double segundosParaElProximoCambio;
+    double segundosRestantesDePausa;
+    bool estaEnPausaDeCambio;
 };
 
 #endif
 ```
 
----
+## Algoritmo Paso a Paso (movimiento_circular.cpp)
 
-## Archivo de Implementacion: `movimiento_circular.cpp`
+### Constructor
+1. Inicializar atributos numericos en `0.0`, `sentidoDeGiro = 1`, `estaEnPausaDeCambio = false`.
 
-### Inclusiones requeridas
-```cpp
-#include "fisicas/movimiento_circular.h"
-#include <cmath>
-```
+### configurarParametrosCirculares(double centroX, double centroY, double radioInicial, double velocidadAngular)
+1. `assert(radioInicial >= radioMinimoPermitidoEnCasillas); assert(velocidadAngular > 0.0);`
+2. Asignar `centroDeGiroX = centroX; centroDeGiroY = centroY;`.
+3. Asignar `radioActualEnCasillas = radioInicial; radioObjetivoEnCasillas = radioInicial;`.
+4. Asignar `velocidadAngularEnRadianesPorSegundo = velocidadAngular;`.
+5. Asignar `faseInicialEnRadianes = 0.0; sentidoDeGiro = 1;`.
+6. Asignar `segundosParaElProximoCambio = tiempoMinimoEntreCambiosEnSegundos;`.
+7. Asignar `segundosRestantesDePausa = 0.0; estaEnPausaDeCambio = false;`.
+8. Invocar `reiniciarSimulacion()`.
 
-### Implementacion de Metodos
+### reiniciarSimulacion()
+1. Asignar `tiempoAcumuladoEnSegundos = 0.0; estaSimulacionActiva = true;`.
 
-#### 1. Constructor
-- Inicializa variables en 0.0, `sentidoDeGiro = 1`, `estaEnPausaDeCambio = false`.
+### avanzarYCalcularPosicion(double segundosDesdeElCuadroAnterior)
+1. Si `estaEnPausaDeCambio`:
+   - Descontar `segundosRestantesDePausa -= segundosDesdeElCuadroAnterior;`.
+   - Interpolar suavemente el radio hacia `radioObjetivoEnCasillas` proporcional al tiempo de pausa transcurrido.
+   - Si `segundosRestantesDePausa <= 0.0`:
+     - `estaEnPausaDeCambio = false;`
+     - `segundosRestantesDePausa = 0.0;`
+     - `radioActualEnCasillas = radioObjetivoEnCasillas;`
+   - Retornar la coordenada fija actual sin avanzar el tiempo angular acumulado.
+2. Si no esta en pausa:
+   - Sumar `tiempoAcumuladoEnSegundos += segundosDesdeElCuadroAnterior;`.
+   - Descontar `segundosParaElProximoCambio -= segundosDesdeElCuadroAnterior;`.
+   - Calcular angulo instantaneo: `anguloActual = faseInicialEnRadianes + (static_cast<double>(sentidoDeGiro) * velocidadAngularEnRadianesPorSegundo * tiempoAcumuladoEnSegundos)`.
+   - Calcular `posicionX = centroDeGiroX + (radioActualEnCasillas * std::cos(anguloActual))`.
+   - Calcular `posicionY = centroDeGiroY + (radioActualEnCasillas * std::sin(anguloActual))`.
+   - Retornar `CoordenadaFisicaTresEjes{ posicionX, posicionY, 0.0 }`.
 
-#### 2. `configurarParametrosCirculares`
-- `centroDeGiroX = centroX; centroDeGiroY = centroY;`
-- `radioActualEnCasillas = radioInicial;`
-- `velocidadAngularEnRadianesPorSegundo = velocidadAngular;`
-- `faseInicialEnRadianes = 0.0; sentidoDeGiro = 1;`
-- `segundosParaElProximoCambio = ConstantesCircular::TIEMPO_MINIMO_ENTRE_CAMBIOS_EN_SEGUNDOS;`
-- `segundosRestantesDePausa = 0.0; estaEnPausaDeCambio = false;`
-- Llama a `reiniciarSimulacion()`.
-
-#### 3. `reiniciarSimulacion`
-- `tiempoAcumuladoEnSegundos = 0.0;`
-- `estaSimulacionActiva = true;`
-
-#### 4. `avanzarYCalcularPosicion`
-- Si `estaEnPausaDeCambio`:
-  - `segundosRestantesDePausa -= segundosDesdeElCuadroAnterior;`
-  - Si `segundosRestantesDePausa <= 0.0`:
-    - `estaEnPausaDeCambio = false;`
-    - `segundosRestantesDePausa = 0.0;`
-  - En pausa, el tiempo de movimiento no avanza.
-- Si no esta en pausa:
-  - `tiempoAcumuladoEnSegundos += segundosDesdeElCuadroAnterior;`
-  - `segundosParaElProximoCambio -= segundosDesdeElCuadroAnterior;`
-- Calculo de angulo actual:
-  - `double anguloActual = faseInicialEnRadianes + (sentidoDeGiro * velocidadAngularEnRadianesPorSegundo * tiempoAcumuladoEnSegundos);`
-  - `double posicionCalculadaX = centroDeGiroX + radioActualEnCasillas * std::cos(anguloActual);`
-  - `double posicionCalculadaY = centroDeGiroY + radioActualEnCasillas * std::sin(anguloActual);`
-  - Retorna `CoordenadaFisicaTresEjes{ posicionCalculadaX, posicionCalculadaY, 0.0 };`
-
-#### 5. `variarUnSoloParametroDePatrulla`
-- Congela posicion angular actual:
-  - `double anguloActual = faseInicialEnRadianes + (sentidoDeGiro * velocidadAngularEnRadianesPorSegundo * tiempoAcumuladoEnSegundos);`
-  - `faseInicialEnRadianes = anguloActual;`
-  - `tiempoAcumuladoEnSegundos = 0.0;`
-- Entra en pausa:
-  - `estaEnPausaDeCambio = true;`
-  - `segundosRestantesDePausa = ConstantesCircular::DURACION_PAUSA_CAMBIO_EN_SEGUNDOS;`
-  - `segundosParaElProximoCambio = azar.generarDecimalEnRango(ConstantesCircular::TIEMPO_MINIMO_ENTRE_CAMBIOS_EN_SEGUNDOS, ConstantesCircular::TIEMPO_MAXIMO_ENTRE_CAMBIOS_EN_SEGUNDOS);`
-- Sortea 1 variable entre 3 (indice 0, 1 o 2):
-  - Caso 0 (cambiar radio):
-    - `radioActualEnCasillas += azar.generarDecimalEnRango(-ConstantesCircular::FACTOR_VARIACION_RADIO, ConstantesCircular::FACTOR_VARIACION_RADIO);`
-    - Si `radioActualEnCasillas < 1.5` se ajusta a 1.5.
-  - Caso 1 (invertir sentido):
-    - `sentidoDeGiro = -sentidoDeGiro;`
-  - Caso 2 (ajustar velocidad angular):
-    - `double multiplicador = azar.generarDecimalEnRango(1.0 - ConstantesCircular::FACTOR_VARIACION_VELOCIDAD, 1.0 + ConstantesCircular::FACTOR_VARIACION_VELOCIDAD);`
-    - `velocidadAngularEnRadianesPorSegundo *= multiplicador;`
+### variarUnSoloParametroDePatrulla(AzarConSemilla& azar)
+1. Calcular y congelar el angulo actual exacto: `anguloActual = faseInicialEnRadianes + (static_cast<double>(sentidoDeGiro) * velocidadAngularEnRadianesPorSegundo * tiempoAcumuladoEnSegundos)`.
+2. Asignar `faseInicialEnRadianes = anguloActual; tiempoAcumuladoEnSegundos = 0.0;`.
+3. Activar pausa: `estaEnPausaDeCambio = true; segundosRestantesDePausa = duracionPausaDeCambioEnSegundos;`.
+4. Sortear tiempo para el proximo cambio: `segundosParaElProximoCambio = azar.generarDecimalEnRango(tiempoMinimoEntreCambiosEnSegundos, tiempoMaximoEntreCambiosEnSegundos);`.
+5. Sortear una sola variable entre tres opciones (0, 1 o 2):
+   - Opcion 0 (Modificar radio):
+     - `variacion = azar.generarDecimalEnRango(-incrementoRadioEnCasillas, incrementoRadioEnCasillas);`
+     - `radioObjetivoEnCasillas = CalculosEspaciales::mantenerValorDentroDelRango(radioActualEnCasillas + variacion, radioMinimoPermitidoEnCasillas, radioMaximoPermitidoEnCasillas);`
+   - Opcion 1 (Invertir sentido de giro):
+     - `sentidoDeGiro = -sentidoDeGiro;`
+   - Opcion 2 (Ajustar velocidad angular):
+     - `multiplicador = azar.generarDecimalEnRango(1.0 - factorVariacionVelocidadAngular, 1.0 + factorVariacionVelocidadAngular);`
+     - `velocidadAngularEnRadianesPorSegundo = CalculosEspaciales::mantenerValorDentroDelRango(velocidadAngularEnRadianesPorSegundo * multiplicador, velocidadAngularMinimaPermitida, velocidadAngularMaximaPermitida);`

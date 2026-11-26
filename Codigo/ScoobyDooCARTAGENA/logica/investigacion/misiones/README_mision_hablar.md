@@ -1,96 +1,83 @@
-# ESPECIFICACION TECNICA: mision_hablar.h / mision_hablar.cpp
+# ESPECIFICACIÓN TÉCNICA DE BAJO NIVEL: MISIÓN HABLAR
 
-## Archivo de Cabecera: `mision_hablar.h`
+## 1. PROPÓSITO ARQUITECTÓNICO Y ROL EN EL SISTEMA
+La clase `MisionHablar` hereda de `MisionBase` y gestiona los objetivos en los que Scooby debe localizar a un personaje no jugable específico (ciudadano, pescador, comerciante o miembro de Mystery Inc.), interactuar con él dentro de un radio de proximidad definido y sostener el diálogo hasta recibir la pista o confirmación del avance de la investigación.
 
-### Guardas de inclusion
+## 2. INCLUSIONES Y DEPENDENCIAS ESTRICTAS
 ```cpp
-#ifndef MISION_HABLAR_H
-#define MISION_HABLAR_H
-```
+#pragma once
 
-### Inclusiones requeridas
-```cpp
 #include "investigacion/misiones/mision.h"
-#include "personajes/personaje_no_jugable.h"
+#include <string>
+
+class MundoDeCartagena;
 ```
 
-### Declaracion de Clase `MisionHablar`
+## 3. DECLARACIÓN COMPLETA DE LA CLASE
 ```cpp
 class MisionHablar : public MisionBase {
-private:
-    TipoRolDelPersonaje rolDelPersonajeObjetivo;
-    bool requiereAcertijoConOpciones;
-    QString preguntaDelAcertijo;
-    QString opcionesDeRespuesta[3];
-    int indiceDeLaRespuestaCorrecta;
-    int indiceDeLaOpcionDescartadaPorGema;
-    std::vector<QString> clavesDePersonajesQueDebenHablarAntes;
-    bool respondioCorrectamente;
-
 public:
-    MisionHablar(int codigo, int paso, const QString& titulo, TipoRolDelPersonaje rolObjetivo);
+    MisionHablar(
+        int identificadorUnico,
+        std::string tituloDescriptivo,
+        std::string descripcionDetallada,
+        int recompensaDePuntaje,
+        int identificadorDelPersonajeObjetivo,
+        std::string dialogoAlInteractuar,
+        float distanciaMaximaDeInteraccion
+    );
 
-    void configurarAcertijo(const QString& pregunta, const QString& op0, const QString& op1, const QString& op2, int indiceCorrecto);
-    void descartarOpcionPorGema();
-    bool verificarRespuesta(int indiceElegido);
+    ~MisionHablar() override = default;
 
-    void prepararMision(AzarConSemilla& azar, const Mapa& mapa) override;
-    bool evaluarCumplimientoEnCuadro(const SituacionActualDelMundo& situacion) override;
+    void iniciar(MundoDeCartagena& mundo) override;
+    void actualizar(MundoDeCartagena& mundo, float segundosTranscurridos) override;
+    bool verificarCondicionDeCompletitud(MundoDeCartagena& mundo) override;
+    void completar(MundoDeCartagena& mundo) override;
+    void reiniciar() override;
 
-    TipoRolDelPersonaje obtenerRolDelPersonajeObjetivo() const;
-    bool obtenerRequiereAcertijoConOpciones() const;
-    QString obtenerPreguntaDelAcertijo() const;
-    QString obtenerOpcionDeRespuesta(int indice) const;
-    int obtenerIndiceDeLaOpcionDescartadaPorGema() const;
+    int obtenerIdentificadorDelPersonajeObjetivo() const;
+    const std::string& obtenerDialogoAlInteractuar() const;
+    bool estaConversacionFinalizada() const;
+
+    void registrarInteraccionDelJugador();
+
+private:
+    int identificadorDelPersonajeObjetivo;
+    std::string dialogoAlInteractuar;
+    float distanciaMaximaDeInteraccion;
+    float distanciaMaximaCuadrada;
+    bool interaccionRegistrada;
+    bool conversacionFinalizada;
 };
-
-#endif
 ```
 
----
-
-## Archivo de Implementacion: `mision_hablar.cpp`
-
-### Inclusiones requeridas
+## 4. CONSTANTES DE COMPORTAMIENTO
 ```cpp
-#include "investigacion/misiones/mision_hablar.h"
-#include "personajes/scooby.h"
-#include "personajes/personaje_no_jugable.h"
-#include "herramientas/calculos_espaciales.h"
+namespace ConstantesMisionHablar {
+    inline constexpr float DISTANCIA_POR_DEFECTO_DE_INTERACCION = 48.0f;
+}
 ```
 
-### Implementacion de Metodos
+## 5. INVARIANTES DE CLASE Y REGLAS DE NEGOCIO
+1. `identificadorDelPersonajeObjetivo` debe coincidir con el identificador asignado al NPC correspondiente en `MundoDeCartagena`.
+2. Para evitar operaciones costosas de raíz cuadrada en cada ciclo de actualización, se almacena `distanciaMaximaCuadrada = distanciaMaximaDeInteraccion * distanciaMaximaDeInteraccion`.
+3. La misión solo se considera completada si `interaccionRegistrada` y `conversacionFinalizada` son verdaderos, y Scooby se encuentra dentro del rango de proximidad al momento del suceso.
 
-#### 1. Constructor
-- Llama a `MisionBase(codigo, paso, titulo)`.
-- `rolDelPersonajeObjetivo = rolObjetivo;`
-- `requiereAcertijoConOpciones = false;`
-- `indiceDeLaRespuestaCorrecta = 0;`
-- `indiceDeLaOpcionDescartadaPorGema = -1;`
-- `respondioCorrectamente = false;`
+## 6. LÓGICA PASO A PASO DE IMPLEMENTACIÓN
+### `iniciar`
+1. Cambia el estado a `EstadoDeMision::EnProgreso`.
+2. Restablece `interaccionRegistrada = false` y `conversacionFinalizada = false`.
 
-#### 2. `configurarAcertijo`
-- Asigna pregunta, las 3 opciones de respuesta y el indice correcto.
-- `requiereAcertijoConOpciones = true;`
+### `actualizar`
+1. Si el estado no es `EstadoDeMision::EnProgreso`, retorna inmediatamente.
+2. Si `interaccionRegistrada` es verdadero, no requiere cálculos de distancia continuos y espera la señal de fin de diálogo.
+3. Si el jugador presiona la tecla de acción frente al personaje objetivo, el sistema externo o `MundoDeCartagena` invoca `registrarInteraccionDelJugador()`.
+4. Evalúa `verificarCondicionDeCompletitud(mundo)`. Si retorna verdadero, invoca `completar(mundo)`.
 
-#### 3. `descartarOpcionPorGema`
-- Si no se ha descartado aun, busca un indice `i != indiceDeLaRespuestaCorrecta` y asigna `indiceDeLaOpcionDescartadaPorGema = i;`
+### `verificarCondicionDeCompletitud`
+1. Comprueba si `interaccionRegistrada && conversacionFinalizada`.
+2. Retorna el resultado booleano.
 
-#### 4. `verificarRespuesta`
-- Si `indiceElegido == indiceDeLaRespuestaCorrecta`:
-  - `respondioCorrectamente = true;`
-  - Retorna `true;`
-- Retorna `false;`
-
-#### 5. `prepararMision`
-- No requiere generacion aleatoria espacial adicional; el personaje ya existe en el mapa.
-
-#### 6. `evaluarCumplimientoEnCuadro`
-- Si `situacion.numeroDeSerieDelPersonajeInteractuado == -1` retorna `false`.
-- Busca en `situacion.personajes` el personaje con ese numero de serie.
-- Si `personaje->obtenerRol() == rolDelPersonajeObjetivo`:
-  - Si `requiereAcertijoConOpciones`: retorna `respondioCorrectamente;`
-  - Si no requiere acertijo (solo hablar):
-    - `finalizarYMarcarComoCompletada();`
-    - Retorna `true;`
-- Retorna `false;`
+### `registrarInteraccionDelJugador`
+1. Marca `interaccionRegistrada = true`.
+2. Marca `conversacionFinalizada = true`.

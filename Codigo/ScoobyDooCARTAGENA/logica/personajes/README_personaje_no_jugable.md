@@ -1,32 +1,57 @@
 # ESPECIFICACION TECNICA: personaje_no_jugable.h / personaje_no_jugable.cpp
 
-## Archivo de Cabecera: `personaje_no_jugable.h`
+## Archivo y Ubicacion
+`logica/personajes/personaje_no_jugable.h`
+`logica/personajes/personaje_no_jugable.cpp`
 
-### Guardas de inclusion
-```cpp
-#ifndef PERSONAJE_NO_JUGABLE_H
-#define PERSONAJE_NO_JUGABLE_H
-```
+## Proposito y Responsabilidad Unica
+Representa a ciudadanos, amigos de la pandilla, centinelas, secuaces y al villano colonial. Es dueño de su cerebro de inteligencia artificial (`CerebroBase*`) y delega su comportamiento mediante composicion limpia.
 
-### Inclusiones requeridas
-```cpp
-#include "personajes/elemento_del_mapa.h"
-#include "inteligencia/cerebro.h"
-#include "fisicas/movimiento.h"
-#include "herramientas/azar_con_semilla.h"
-#include <QString>
-```
+## Dependencias
+### Para personaje_no_jugable.h
+- `#include "personajes/elemento_del_mapa.h"`
+- `#include "herramientas/azar_con_semilla.h"`
+- `#include <QString>`
+- `#include <cstdint>`
 
-### Declaraciones Adelantadas (Forward Declarations)
+### Declaraciones adelantadas en personaje_no_jugable.h
 ```cpp
 class Scooby;
 class CerebroBase;
+class MovimientoBase;
+class Mapa;
 struct BuzonCompartidoDeAvisos;
 ```
 
-### Enumeraciones
+### Para personaje_no_jugable.cpp
+- `#include "personajes/personaje_no_jugable.h"`
+- `#include "personajes/scooby.h"`
+- `#include "inteligencia/cerebro.h"`
+- `#include "fisicas/movimiento.h"`
+- `#include "mapa/mapa.h"`
+- `#include "inteligencia/avisos_entre_agentes.h"`
+- `#include "herramientas/calculos_espaciales.h"`
+- `#include <cmath>`
+- `#include <cassert>`
+
+## Definicion Exacta de Cabecera (personaje_no_jugable.h)
+
 ```cpp
-enum class TipoRolDelPersonaje {
+#ifndef PERSONAJE_NO_JUGABLE_H
+#define PERSONAJE_NO_JUGABLE_H
+
+#include "personajes/elemento_del_mapa.h"
+#include "herramientas/azar_con_semilla.h"
+#include <QString>
+#include <cstdint>
+
+class Scooby;
+class CerebroBase;
+class MovimientoBase;
+class Mapa;
+struct BuzonCompartidoDeAvisos;
+
+enum class TipoRolDelPersonaje : uint8_t {
     CiudadanoInformativo,
     AmigoVelma,
     AmigoFred,
@@ -37,14 +62,14 @@ enum class TipoRolDelPersonaje {
     VillanoFantasma
 };
 
-enum class IconoSobreLaCabeza {
+enum class IconoSobreLaCabeza : uint8_t {
     Ninguno,
     SignoDeInterrogacion,
     SignoDeExclamacion,
     AuraDeFuria
 };
 
-enum class ServicioDeAmigo {
+enum class ServicioDeAmigo : uint8_t {
     Ninguno,
     SoloConversacion,
     CambiarGemaPorProvisiones,
@@ -52,42 +77,30 @@ enum class ServicioDeAmigo {
     DarIndicioSutil,
     OcultarAScooby
 };
-```
 
-### Constantes constexpr
-```cpp
-namespace ConstantesPNJ {
-    constexpr double ANCHO_COLISION_PNJ = 0.70;
-    constexpr double ALTO_COLISION_PNJ = 0.70;
-    constexpr double VELOCIDAD_BASE_PNJ = 3.0;
-}
-```
-
-### Declaracion de Clase `PersonajeNoJugable`
-```cpp
-class PersonajeNoJugable : public ElementoDelMapaBase {
-private:
-    TipoRolDelPersonaje rol;
-    CerebroBase* cerebro;
-    MovimientoBase* movimientoDeRecorrido;
-    IconoSobreLaCabeza iconoSobreLaCabeza;
-    ServicioDeAmigo servicioDisponible;
-    double velocidadActualEnCasillasPorSegundo;
-    CoordenadaCasilla destinoActual;
-    QString claveDeDialogo;
-
+class PersonajeNoJugable final : public ElementoDelMapaBase {
 public:
-    PersonajeNoJugable(TipoRolDelPersonaje rolAsignado, double posX, double posY);
+    static constexpr double anchoColisionPersonaje = 0.70;
+    static constexpr double altoColisionPersonaje = 0.70;
+    static constexpr double velocidadBasePersonajeNoJugable = 3.0;
+    static constexpr double distanciaToleranciaLlegada = 0.05;
+
+    PersonajeNoJugable(TipoRolDelPersonaje rolAsignado, double posicionInicialX, double posicionInicialY);
     ~PersonajeNoJugable() override;
+
+    PersonajeNoJugable(const PersonajeNoJugable&) = delete;
+    PersonajeNoJugable& operator=(const PersonajeNoJugable&) = delete;
 
     void avanzarUnCuadro(double segundosTranscurridos) override;
     void pensarYActuar(const Scooby& scooby, const Mapa& mapa, BuzonCompartidoDeAvisos& buzon, AzarConSemilla& azar, double segundosTranscurridos);
 
-    void asignarCerebro(CerebroBase* nuevoCerebro);
-    void asignarMovimientoDeRecorrido(MovimientoBase* nuevoMovimiento);
+    void asignarCerebro(CerebroBase* nuevoCerebroDueno);
+    void asignarMovimientoDeRecorrido(MovimientoBase* nuevoMovimientoDueno);
 
     TipoRolDelPersonaje obtenerRol() const;
-    CerebroBase* obtenerCerebro() const;
+    const CerebroBase* obtenerCerebroObservador() const;
+    CerebroBase* modificarCerebro();
+
     IconoSobreLaCabeza obtenerIconoSobreLaCabeza() const;
     void establecerIconoSobreLaCabeza(IconoSobreLaCabeza icono);
 
@@ -106,82 +119,76 @@ public:
     void moverHacia(double destinoX, double destinoY, const Mapa& mapa, double segundosTranscurridos);
     void actualizarPresenciaPorMomentoDelDia(bool esDeNoche, const RectanguloVision& vistaDeScooby, const Mapa& mapa, AzarConSemilla& azar);
     void activarEstadoDePanico();
+
+private:
+    TipoRolDelPersonaje rol;
+    CerebroBase* cerebro;
+    MovimientoBase* movimientoDeRecorrido;
+    IconoSobreLaCabeza iconoSobreLaCabeza;
+    ServicioDeAmigo servicioDisponible;
+    double velocidadActualEnCasillasPorSegundo;
+    CoordenadaCasilla destinoActual;
+    QString claveDeDialogo;
 };
 
 #endif
 ```
 
----
+## Algoritmo Paso a Paso (personaje_no_jugable.cpp)
 
-## Archivo de Implementacion: `personaje_no_jugable.cpp`
+### Constructor
+1. Invocar `ElementoDelMapaBase(posicionInicialX, posicionInicialY, anchoColisionPersonaje, altoColisionPersonaje)`.
+2. Asignar `rol = rolAsignado; cerebro = nullptr; movimientoDeRecorrido = nullptr;`.
+3. Asignar `iconoSobreLaCabeza = IconoSobreLaCabeza::Ninguno;`.
+4. Asignar `velocidadActualEnCasillasPorSegundo = velocidadBasePersonajeNoJugable;`.
+5. Asignar `destinoActual = obtenerCasillaActual();`.
+6. Configurar servicio de amigo segun rol:
+   - `AmigoVelma`: `servicioDisponible = ServicioDeAmigo::RecibirEvidenciasDeVelma;`
+   - `AmigoFred`: `servicioDisponible = ServicioDeAmigo::CambiarGemaPorProvisiones;`
+   - `AmigoShaggy`: `servicioDisponible = ServicioDeAmigo::DarIndicioSutil;`
+   - `AmigoDaphne`: `servicioDisponible = ServicioDeAmigo::OcultarAScooby;`
+   - Otros roles: `servicioDisponible = ServicioDeAmigo::Ninguno;`
+7. Si `rol == TipoRolDelPersonaje::VillanoFantasma`:
+   - `estaActivo = false; esVisible = false;` (nace durmiendo de dia fuera del mapa).
 
-### Inclusiones requeridas
-```cpp
-#include "personajes/personaje_no_jugable.h"
-#include "personajes/scooby.h"
-#include "inteligencia/cerebro.h"
-#include "inteligencia/avisos_entre_agentes.h"
-#include "herramientas/calculos_espaciales.h"
-#include <cmath>
-```
+### Destructor
+1. Si `cerebro != nullptr`: `delete cerebro; cerebro = nullptr;`
+2. Si `movimientoDeRecorrido != nullptr`: `delete movimientoDeRecorrido; movimientoDeRecorrido = nullptr;`
 
-### Implementacion de Metodos
+### avanzarUnCuadro(double segundosTranscurridos)
+1. Si `!estaActivo`, terminar.
+2. Si `movimientoDeRecorrido != nullptr`:
+   - `CoordenadaFisicaTresEjes posicion = movimientoDeRecorrido->avanzarYCalcularPosicion(segundosTranscurridos);`
+   - `posicionX = posicion.posicionX; posicionY = posicion.posicionY;`
 
-#### 1. Constructor
-- Llama a `ElementoDelMapaBase(posX, posY, ConstantesPNJ::ANCHO_COLISION_PNJ, ConstantesPNJ::ALTO_COLISION_PNJ)`.
-- `rol = rolAsignado; cerebro = nullptr; movimientoDeRecorrido = nullptr;`
-- `iconoSobreLaCabeza = IconoSobreLaCabeza::Ninguno;`
-- `velocidadActualEnCasillasPorSegundo = ConstantesPNJ::VELOCIDAD_BASE_PNJ;`
-- `destinoActual = obtenerCasillaActual();`
-- Asignacion de servicio inicial segun rol:
-  - `AmigoVelma`: `ServicioDeAmigo::RecibirEvidenciasDeVelma;`
-  - `AmigoFred`: `ServicioDeAmigo::CambiarGemaPorProvisiones;`
-  - `AmigoShaggy`: `ServicioDeAmigo::DarIndicioSutil;`
-  - `AmigoDaphne`: `ServicioDeAmigo::OcultarAScooby;`
-  - Otros: `ServicioDeAmigo::Ninguno;`
-- Si `rol == TipoRolDelPersonaje::VillanoFantasma`: `estaActivo = false; esVisible = false;` (inicia durmiendo de dia).
+### pensarYActuar(const Scooby& scooby, const Mapa& mapa, BuzonCompartidoDeAvisos& buzon, AzarConSemilla& azar, double segundosTranscurridos)
+1. Si `!estaActivo`, terminar.
+2. Si `cerebro != nullptr`:
+   - `cerebro->actualizarCerebroEnCuadro(*this, scooby, mapa, buzon, azar, segundosTranscurridos);`
 
-#### 2. Destructor
-- Libera punteros dueños:
-  - `if (cerebro != nullptr) { delete cerebro; cerebro = nullptr; }`
-  - `if (movimientoDeRecorrido != nullptr) { delete movimientoDeRecorrido; movimientoDeRecorrido = nullptr; }`
+### moverHacia(double destinoX, double destinoY, const Mapa& mapa, double segundosTranscurridos)
+1. `deltaX = destinoX - posicionX; deltaY = destinoY - posicionY;`
+2. `distancia = std::sqrt((deltaX * deltaX) + (deltaY * deltaY));`
+3. Si `distancia < distanciaToleranciaLlegada`, terminar.
+4. `dirX = deltaX / distancia; dirY = deltaY / distancia;`
+5. Actualizar `direccionMirada`:
+   - Si `std::fabs(dirX) >= std::fabs(dirY)`: `direccionMirada = (dirX > 0.0) ? DireccionMirada::Este : DireccionMirada::Oeste;`
+   - En caso contrario: `direccionMirada = (dirY > 0.0) ? DireccionMirada::Sur : DireccionMirada::Norte;`
+6. `paso = velocidadActualEnCasillasPorSegundo * segundosTranscurridos;`
+7. `puedeEntrarAZonasRestringidas = (rol == TipoRolDelPersonaje::SecuazVigilante || rol == TipoRolDelPersonaje::VillanoFantasma);`
+8. Validar por ejes separados:
+   - `nuevaX = posicionX + (dirX * paso);`
+   - Si `mapa.esPosicionTransitable(nuevaX, posicionY, puedeEntrarAZonasRestringidas)`, asignar `posicionX = nuevaX;`.
+   - `nuevaY = posicionY + (dirY * paso);`
+   - Si `mapa.esPosicionTransitable(posicionX, nuevaY, puedeEntrarAZonasRestringidas)`, asignar `posicionY = nuevaY;`.
 
-#### 3. `avanzarUnCuadro`
-- Si `!estaActivo` retorna.
-- Si `movimientoDeRecorrido != nullptr`:
-  - `CoordenadaFisicaTresEjes pos = movimientoDeRecorrido->avanzarYCalcularPosicion(segundosTranscurridos);`
-  - `posicionX = pos.posicionX; posicionY = pos.posicionY;`
-
-#### 4. `pensarYActuar`
-- Si `!estaActivo` retorna.
-- Si `cerebro != nullptr`:
-  - `cerebro->actualizarCerebroEnCuadro(*this, scooby, mapa, buzon, azar, segundosTranscurridos);`
-
-#### 5. `moverHacia`
-- `double deltaX = destinoX - posicionX;`
-- `double deltaY = destinoY - posicionY;`
-- `double distancia = std::sqrt(deltaX * deltaX + deltaY * deltaY);`
-- Si `distancia < 0.05` retorna.
-- `double dirX = deltaX / distancia;`
-- `double dirY = deltaY / distancia;`
-- Actualiza `direccionMirada` segun componente dominante.
-- Desplazamiento por ejes:
-  - `double paso = velocidadActualEnCasillasPorSegundo * segundosTranscurridos;`
-  - `double nuevaX = posicionX + dirX * paso;`
-  - `bool puedeEntrarARestringidas = (rol == TipoRolDelPersonaje::SecuazVigilante || rol == TipoRolDelPersonaje::VillanoFantasma);`
-  - Si `mapa.esPosicionTransitable(nuevaX, posicionY, puedeEntrarARestringidas)`: `posicionX = nuevaX;`
-  - `double nuevaY = posicionY + dirY * paso;`
-  - Si `mapa.esPosicionTransitable(posicionX, nuevaY, puedeEntrarARestringidas)`: `posicionY = nuevaY;`
-
-#### 6. `actualizarPresenciaPorMomentoDelDia`
-- Si `rol == TipoRolDelPersonaje::VillanoFantasma`:
-  - Si `!esDeNoche`:
-    - `estaActivo = false; esVisible = false;`
-  - Si `esDeNoche && !estaActivo`:
-    - Sortea casillas transitables fuera de `vistaDeScooby` usando `azar.barajarListaDeCasillas`.
-    - Ubica al villano en la primera casilla transitable que no este dentro del rectangulo de vision de Scooby.
-    - `estaActivo = true; esVisible = true;`
-
-#### 7. `activarEstadoDePanico`
-- Si `cerebro != nullptr`:
-  - Notifica al cerebro pasar a `EstadoMentalDelAgente::HuyendoEnPanico`.
+### actualizarPresenciaPorMomentoDelDia
+1. Si `rol != TipoRolDelPersonaje::VillanoFantasma`, terminar.
+2. Si `!esDeNoche`:
+   - `estaActivo = false; esVisible = false;`
+3. Si `esDeNoche && !estaActivo`:
+   - Obtener lista de casillas aptas para trampa o transitables del mapa.
+   - Barajar lista con `azar.barajarListaDeCasillas`.
+   - Buscar la primera casilla `casilla` que no este contenida dentro de `vistaDeScooby`.
+   - Asignar `posicionX = casilla.columna + 0.5; posicionY = casilla.fila + 0.5;`.
+   - `estaActivo = true; esVisible = true;`

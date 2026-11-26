@@ -1,51 +1,61 @@
 # ESPECIFICACION TECNICA: mapa.h / mapa.cpp
 
-## Archivo de Cabecera: `mapa.h`
+## Archivo y Ubicacion
+`logica/mapa/mapa.h`
+`logica/mapa/mapa.cpp`
 
-### Guardas de inclusion
+## Proposito y Responsabilidad Unica
+Almacena la matriz lineal del escenario colonial, gestiona la estructura de datos compacta en memoria cache (4 bytes por celda), traza lineas de vista con Bresenham y ejecuta A* acotado con buffer persistente sin reservar memoria dinamica en el bucle.
+
+## Dependencias
+### Para mapa.h
+- `#include <vector>`
+- `#include <QString>`
+- `#include <cstdint>`
+- `#include <cassert>`
+- `#include "herramientas/tipos_espaciales.h"`
+
+### Para mapa.cpp
+- `#include "mapa/mapa.h"`
+- `#include "herramientas/calculos_espaciales.h"`
+- `#include <queue>`
+- `#include <cmath>`
+
+## Definicion Exacta de Cabecera (mapa.h)
+
 ```cpp
 #ifndef MAPA_H
 #define MAPA_H
-```
 
-### Inclusiones requeridas
-```cpp
 #include <vector>
 #include <QString>
-```
+#include <cstdint>
+#include <cassert>
+#include "herramientas/tipos_espaciales.h"
 
-### Estructuras y Enumeraciones
-```cpp
-struct CoordenadaCasilla {
-    int columna;
-    int fila;
-
-    bool operator==(const CoordenadaCasilla& otraCasilla) const {
-        return (columna == otraCasilla.columna && fila == otraCasilla.fila);
-    }
-
-    bool operator!=(const CoordenadaCasilla& otraCasilla) const {
-        return !(*this == otraCasilla);
-    }
-};
-
-enum class TipoDeTerreno {
+enum class TipoDeTerreno : uint8_t {
     SueloTransitable,
     CaminoDeAdoquin,
     ParedSolida,
     AguaMuralla
 };
 
+#pragma pack(push, 1)
 struct CasillaDelMapa {
-    TipoDeTerreno terreno;
-    int numeroDeZona;
-    bool esTransitable;
-    bool esZonaRestringida;
-    bool tienePasoBloqueado;
-    bool esArbustoParaOcultarse;
-    bool esAptaParaTrampa;
-    bool esAlcanzableDesdeElInicio;
+    TipoDeTerreno terreno : 4;
+    uint8_t numeroDeZona : 4;
+    uint8_t esTransitable : 1;
+    uint8_t esZonaRestringida : 1;
+    uint8_t tienePasoBloqueado : 1;
+    uint8_t esArbustoParaOcultarse : 1;
+    uint8_t esAptaParaTrampa : 1;
+    uint8_t esAlcanzableDesdeElInicio : 1;
+    uint8_t reservadoParaAlineacion : 2;
+    uint16_t identificadorDeBusquedaAEstrella;
 };
+#pragma pack(pop)
+
+static_assert(sizeof(CasillaDelMapa) == 4, "La estructura CasillaDelMapa debe ocupar exactamente cuatro bytes.");
 
 struct SectorDelMapa {
     QString nombre;
@@ -57,26 +67,19 @@ struct ReferenciaDelMapa {
     QString nombre;
     CoordenadaCasilla casilla;
 };
-```
 
-### Declaracion de Clase `Mapa`
-```cpp
-class Mapa {
-private:
-    int anchoEnCasillas;
-    int altoEnCasillas;
-    std::vector<CasillaDelMapa> cuadriculaLineal;
-    std::vector<CoordenadaCasilla> listaDeArbustos;
-    std::vector<CoordenadaCasilla> casillasAptasParaTrampa;
-    std::vector<SectorDelMapa> sectores;
-    std::vector<ReferenciaDelMapa> referencias;
-
-    inline int calcularIndiceLineal(int columna, int fila) const {
-        return fila * anchoEnCasillas + columna;
-    }
-
+class Mapa final {
 public:
+    static constexpr int limiteMaximoNodosExploradosAEstrella = 300;
+    static constexpr int tamanoLadoZonaTrampaEnCasillas = 5;
+    static constexpr int radioMitadZonaTrampaEnCasillas = 2;
+
     Mapa();
+    ~Mapa() = default;
+
+    Mapa(const Mapa&) = delete;
+    Mapa& operator=(const Mapa&) = delete;
+
     void inicializarDimensiones(int ancho, int alto);
     int obtenerAnchoEnCasillas() const;
     int obtenerAltoEnCasillas() const;
@@ -85,11 +88,11 @@ public:
     CasillaDelMapa& modificarCasilla(int columna, int fila);
 
     bool esCasillaValida(int columna, int fila) const;
-    bool esPosicionTransitable(double posicionX, double posicionY, bool puedeEntrarARestringidas) const;
+    bool esPosicionTransitable(double posicionX, double posicionY, bool puedeEntrarAZonasRestringidas) const;
     bool tieneLineaDeVista(CoordenadaCasilla origen, CoordenadaCasilla destino) const;
-    CoordenadaCasilla calcularSiguientePasoHacia(CoordenadaCasilla origen, CoordenadaCasilla destino, bool puedeEntrarARestringidas) const;
+    CoordenadaCasilla calcularSiguientePasoHacia(CoordenadaCasilla origen, CoordenadaCasilla destino, bool puedeEntrarAZonasRestringidas);
 
-    void desbloquearZonaCompleta(int numeroDeZona);
+    void desbloquearZonaCompleta(uint8_t numeroDeZona);
     void cambiarBloqueoDeCasilla(int columna, int fila, bool bloquearPaso);
     QString obtenerSectorEnCasilla(CoordenadaCasilla casilla) const;
     void marcarCasillasAlcanzablesDesde(CoordenadaCasilla casillaDeInicio);
@@ -102,78 +105,97 @@ public:
     void agregarSector(const SectorDelMapa& sector);
     void agregarReferencia(const ReferenciaDelMapa& referencia);
     void agregarArbusto(CoordenadaCasilla casilla);
+
+private:
+    int anchoEnCasillas;
+    int altoEnCasillas;
+    std::vector<CasillaDelMapa> cuadriculaLineal;
+    std::vector<CoordenadaCasilla> listaDeArbustos;
+    std::vector<CoordenadaCasilla> casillasAptasParaTrampa;
+    std::vector<SectorDelMapa> sectores;
+    std::vector<ReferenciaDelMapa> referencias;
+
+    uint16_t numeroDeBusquedaAEstrellaActual;
+    std::vector<int> bufferCostoG;
+    std::vector<int> bufferCostoF;
+    std::vector<int> bufferCameFrom;
+
+    inline int calcularIndiceLineal(int columna, int fila) const {
+        return (fila * anchoEnCasillas) + columna;
+    }
 };
 
 #endif
 ```
 
----
+## Algoritmo Paso a Paso (mapa.cpp)
 
-## Archivo de Implementacion: `mapa.cpp`
+### Constructor
+1. Asignar `anchoEnCasillas = 0; altoEnCasillas = 0; numeroDeBusquedaAEstrellaActual = 1u;`.
 
-### Inclusiones requeridas
-```cpp
-#include "mapa/mapa.h"
-#include "herramientas/calculos_espaciales.h"
-#include <queue>
-#include <cmath>
-```
+### inicializarDimensiones(int ancho, int alto)
+1. `anchoEnCasillas = ancho; altoEnCasillas = alto;`.
+2. Calcular total de casillas: `totalCasillas = ancho * alto;`.
+3. Asignar `cuadriculaLineal.assign(totalCasillas, CasillaDelMapa{});`.
+4. Asignar `bufferCostoG.assign(totalCasillas, 0);`.
+5. Asignar `bufferCostoF.assign(totalCasillas, 0);`.
+6. Asignar `bufferCameFrom.assign(totalCasillas, -1);`.
+7. Limpiar vectores `listaDeArbustos`, `casillasAptasParaTrampa`, `sectores`, `referencias`.
 
-### Implementacion de Metodos
+### esPosicionTransitable(double posicionX, double posicionY, bool puedeEntrarAZonasRestringidas) const
+1. Convertir a casilla mediante `CoordenadaCasilla celda = CalculosEspaciales::convertirPosicionACasilla(posicionX, posicionY);`.
+2. Si `!esCasillaValida(celda.columna, celda.fila)`, retornar `false`.
+3. Consultar la casilla: `const CasillaDelMapa& casilla = obtenerCasilla(celda.columna, celda.fila);`.
+4. Si `casilla.esTransitable == 0u || casilla.tienePasoBloqueado == 1u`, retornar `false`.
+5. Si `casilla.esZonaRestringida == 1u && !puedeEntrarAZonasRestringidas`, retornar `false`.
+6. Retornar `true`.
 
-#### 1. Constructor
-- Inicializa `anchoEnCasillas = 0; altoEnCasillas = 0;`
+### tieneLineaDeVista(CoordenadaCasilla origen, CoordenadaCasilla destino) const
+1. Si `origen == destino`, retornar `true`.
+2. Aplicar algoritmo de Bresenham integro en casillas enteras:
+   - `deltaX = std::abs(destino.columna - origen.columna);`
+   - `deltaY = std::abs(destino.fila - origen.fila);`
+   - `pasoX = (origen.columna < destino.columna) ? 1 : -1;`
+   - `pasoY = (origen.fila < destino.fila) ? 1 : -1;`
+   - `errorActual = deltaX - deltaY;`
+   - `columnaActual = origen.columna; filaActual = origen.fila;`
+3. En bucle continuo:
+   - Si `columnaActual == destino.columna && filaActual == destino.fila`, terminar bucle.
+   - Si no es la casilla de origen:
+     - Consultar casilla `(columnaActual, filaActual)`. Si `casilla.esTransitable == 0u || casilla.tienePasoBloqueado == 1u`, retornar `false`.
+   - `dobleError = 2 * errorActual;`
+   - Si `dobleError > -deltaY`: `errorActual -= deltaY; columnaActual += pasoX;`
+   - Si `dobleError < deltaX`: `errorActual += deltaX; filaActual += pasoY;`
+4. Retornar `true`.
 
-#### 2. `inicializarDimensiones`
-- Redimensiona `cuadriculaLineal` con `ancho * alto` elementos por defecto.
-- Limpia listas internas (`listaDeArbustos`, `casillasAptasParaTrampa`, `sectores`, `referencias`).
+### calcularSiguientePasoHacia(CoordenadaCasilla origen, CoordenadaCasilla destino, bool puedeEntrarAZonasRestringidas)
+1. Si `origen == destino`, retornar `origen`.
+2. Si `!esCasillaValida(destino.columna, destino.fila)`, retornar `origen`.
+3. Incrementar `numeroDeBusquedaAEstrellaActual++`. Si el contador se desborda a cero, asignar `numeroDeBusquedaAEstrellaActual = 1u;` y limpiar los identificadores de busqueda en `cuadriculaLineal`.
+4. Inicializar cola de prioridad `std::priority_queue` con pares `(costoF, indiceLineal)`.
+5. Insertar `indiceOrigen = calcularIndiceLineal(origen.columna, origen.fila)` con `costoG = 0` y `costoF = distanciaManhattan(origen, destino)`.
+6. Asignar `cuadriculaLineal[indiceOrigen].identificadorDeBusquedaAEstrella = numeroDeBusquedaAEstrellaActual`.
+7. Asignar `bufferCameFrom[indiceOrigen] = -1`.
+8. Bucle mientras la cola no este vacia y `nodosExplorados < limiteMaximoNodosExploradosAEstrella`:
+   - Extraer elemento con menor `costoF`.
+   - Si el nodo extraido coincide con el destino, detener exploracion.
+   - Para cada uno de los 4 vecinos ortogonales (Norte, Sur, Este, Oeste):
+     - Si no es valido, continuar.
+     - Si `!esPosicionTransitable(...)`, continuar.
+     - Calcular nuevo `costoG = bufferCostoG[nodoActual] + 1`.
+     - Si el vecino no habia sido visitado en esta busqueda o `nuevoCostoG < bufferCostoG[indiceVecino]`:
+       - `cuadriculaLineal[indiceVecino].identificadorDeBusquedaAEstrella = numeroDeBusquedaAEstrellaActual`.
+       - `bufferCameFrom[indiceVecino] = nodoActual`.
+       - `bufferCostoG[indiceVecino] = nuevoCostoG`.
+       - `bufferCostoF[indiceVecino] = nuevoCostoG + distanciaManhattan(vecino, destino)`.
+       - Insertar en cola de prioridad.
+9. Si el destino no fue alcanzado y se agoto el limite, tomar el nodo alcanzado con menor distancia al objetivo.
+10. Reconstruir la ruta hacia atras usando `bufferCameFrom`.
+11. Retornar la coordenada del nodo inmediatamente posterior a `origen`.
 
-#### 3. `esCasillaValida`
-- Retorna `(columna >= 0 && columna < anchoEnCasillas && fila >= 0 && fila < altoEnCasillas);`
-
-#### 4. `obtenerCasilla` y `modificarCasilla`
-- Retornan `cuadriculaLineal[calcularIndiceLineal(columna, fila)];`
-
-#### 5. `esPosicionTransitable`
-- Calcula columna y fila con `std::floor(posicionX)` y `std::floor(posicionY)`.
-- Si `!esCasillaValida(col, fil)` retorna `false`.
-- `const CasillaDelMapa& casilla = obtenerCasilla(col, fil);`
-- Retorna `false` si: `!casilla.esTransitable || casilla.tienePasoBloqueado || (casilla.esZonaRestringida && !puedeEntrarARestringidas)`.
-- En caso contrario retorna `true`.
-
-#### 6. `tieneLineaDeVista` (Algoritmo Bresenham)
-- `int x0 = origen.columna, y0 = origen.fila;`
-- `int x1 = destino.columna, y1 = destino.fila;`
-- `int dx = std::abs(x1 - x0);`
-- `int dy = std::abs(y1 - y0);`
-- `int sx = (x0 < x1) ? 1 : -1;`
-- `int sy = (y0 < y1) ? 1 : -1;`
-- `int err = dx - dy;`
-- Bucle `while (x0 != x1 || y0 != y1)`:
-  - `int e2 = 2 * err;`
-  - Si `e2 > -dy`: `err -= dy; x0 += sx;`
-  - Si `e2 < dx`: `err += dx; y0 += sy;`
-  - Si `(x0 == x1 && y0 == y1)` sale del bucle (el destino es valido).
-  - Consulta casilla `(x0, y0)`: si `!casilla.esTransitable || casilla.tienePasoBloqueado`, retorna `false`.
-- Retorna `true`.
-
-#### 7. `calcularSiguientePasoHacia` (Algoritmo A* acotado)
-- Si `origen == destino` retorna `origen`.
-- Utiliza cola de prioridad con costo `f = g + h`. Heuristica `h = std::abs(col - destino.columna) + std::abs(fil - destino.fila)`.
-- Maximo de expansiones de nodo: 300.
-- Movimiento ortogonal en 4 direcciones.
-- Reconstruye el camino desde el nodo destino alcanzado (o el mas cercano si se agoto el limite) hasta el origen, y retorna la casilla inmediatamente posterior al origen.
-
-#### 8. `desbloquearZonaCompleta`
-- Recorre `cuadriculaLineal`. Si `casilla.numeroDeZona == numeroDeZona`, asigna `casilla.tienePasoBloqueado = false`.
-
-#### 9. `cambiarBloqueoDeCasilla`
-- `modificarCasilla(columna, fila).tienePasoBloqueado = bloquearPaso;`
-
-#### 10. `obtenerSectorEnCasilla`
-- Itera en `sectores`. Si la casilla cae en el rectangulo delimitado por `esquinaSuperiorIzquierda` y `esquinaInferiorDerecha`, retorna `sector.nombre`.
-- Retorna `""` si no pertenece a ningun sector nombrado.
-
-#### 11. `marcarCasillasAlcanzablesDesde`
-- Ejecuta BFS desde `casillaDeInicio`. Marca `esAlcanzableDesdeElInicio = true` en cada casilla alcanzable.
-- Para cada casilla `(c, f)` alcanzable, valida si el bloque de 5x5 centrado en ella (rango `[c - 2, c + 2]` y `[f - 2, f + 2]`) tiene sus 25 casillas validas, transitables, sin bloqueo y alcanzables. Si cumple, agrega `(c, f)` a `casillasAptasParaTrampa`.
+### marcarCasillasAlcanzablesDesde(CoordenadaCasilla casillaDeInicio)
+1. Ejecutar recorrido BFS con cola `std::queue<CoordenadaCasilla>`.
+2. Marcar `esAlcanzableDesdeElInicio = 1u` en cada celda transitable alcanzable.
+3. Para cada celda alcanzable `(c, f)`:
+   - Verificar cuadrado de 5x5 centrado en `(c, f)`: todas las 25 celdas entre `c - 2, f - 2` y `c + 2, f + 2` deben ser celdas validas, con `esTransitable == 1u`, `tienePasoBloqueado == 0u` y `esAlcanzableDesdeElInicio == 1u`.
+   - Si cumple las 25 condiciones: asignar `cuadriculaLineal[calcularIndiceLineal(c, f)].esAptaParaTrampa = 1u;` y registrar en `casillasAptasParaTrampa`.

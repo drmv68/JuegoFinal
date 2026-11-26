@@ -1,108 +1,103 @@
-# ESPECIFICACION TECNICA: cerebro_secuaz.h / cerebro_secuaz.cpp
+# ESPECIFICACIÓN TÉCNICA DE BAJO NIVEL: CEREBRO SECUAZ
 
-## Archivo de Cabecera: `cerebro_secuaz.h`
+## 1. PROPÓSITO ARQUITECTÓNICO Y ROL EN EL SISTEMA
+La clase `CerebroSecuaz` hereda de `CerebroBase` e implementa la inteligencia artificial de los secuaces patrulleros y guardianes. Su objetivo es patrullar zonas asignadas, detectar a Scooby mediante un cono de visión o proximidad sonora, confirmar sospechas tras una latencia deliberada de reacción (0.4 segundos), emitir avisos acústicos al sistema global de alarmas y perseguir al jugador mediante el algoritmo de caminos mínimos A*. Si pierde el rastro, inspecciona la última posición conocida y regresa metódicamente a su ruta de patrulla.
 
-### Guardas de inclusion
+## 2. INCLUSIONES Y DEPENDENCIAS ESTRICTAS
 ```cpp
-#ifndef CEREBRO_SECUAZ_H
-#define CEREBRO_SECUAZ_H
-```
+#pragma once
 
-### Inclusiones requeridas
-```cpp
 #include "inteligencia/cerebro.h"
+#include <vector>
+#include <cstdint>
 ```
 
-### Constantes constexpr
+## 3. DECLARACIÓN COMPLETA DE LA CLASE
+```cpp
+class CerebroSecuaz : public CerebroBase {
+public:
+    explicit CerebroSecuaz(int identificadorDeRutaInicial);
+    ~CerebroSecuaz() override = default;
+
+    void actualizar(
+        PersonajeNoJugable& personajePortador,
+        MundoDeCartagena& mundo,
+        float segundosTranscurridos
+    ) override;
+
+    void reiniciar() override;
+
+    void agregarPuntoDePatrulla(const CoordenadaEntera& punto);
+    void vaciarPuntosDePatrulla();
+
+private:
+    void ejecutarPatrulla(PersonajeNoJugable& personajePortador, MundoDeCartagena& mundo, float segundosTranscurridos);
+    void ejecutarSospecha(PersonajeNoJugable& personajePortador, MundoDeCartagena& mundo, float segundosTranscurridos);
+    void ejecutarPersecucion(PersonajeNoJugable& personajePortador, MundoDeCartagena& mundo, float segundosTranscurridos);
+    void ejecutarBusquedaEnUltimoRastro(PersonajeNoJugable& personajePortador, MundoDeCartagena& mundo, float segundosTranscurridos);
+
+    void avanzarHaciaPuntoObjetivo(PersonajeNoJugable& personajePortador, const CoordenadaEntera& objetivo, float velocidad, float segundosTranscurridos);
+
+    std::vector<CoordenadaEntera> puntosDePatrulla;
+    int indiceDePatrullaActual;
+    int identificadorDeRutaAsignada;
+
+    float temporizadorDeSospechaAcumulado;
+    float temporizadorDeInspeccionEnRastro;
+    float temporizadorDeRecalculoDeCaminoAEstrella;
+
+    bool avisoDeAlertaEmitido;
+    CoordenadaEntera ultimaPosicionVisualConfirmada;
+};
+```
+
+## 4. CONSTANTES DE COMPORTAMIENTO
 ```cpp
 namespace ConstantesCerebroSecuaz {
-    constexpr double APERTURA_CONO_VISION_RADIANES = 1.3962634; // ~80 grados
-    constexpr double DURACION_PAUSA_ESQUINA_SEGUNDOS = 1.2;
-    constexpr double DISTANCIA_DETECCION_ARBUSTO_CERCANO = 2.0;
+    inline constexpr float TIEMPO_REQUERIDO_DE_CONFIRMACION_DE_SOSPECHA = 0.40f;
+    inline constexpr float TIEMPO_DE_INSPECCION_EN_ULTIMO_RASTRO = 3.50f;
+    inline constexpr float INTERVALO_DE_RECALCULO_A_ESTRELLA = 0.50f;
+    inline constexpr float DISTANCIA_DE_LLEGADA_A_PUNTO_CUADRADA = 16.0f;
+    inline constexpr float VELOCIDAD_DE_PATRULLA = 50.0f;
+    inline constexpr float VELOCIDAD_DE_PERSECUCION = 95.0f;
+    inline constexpr float DISTANCIA_MAXIMA_DE_VISION = 160.0f;
+    inline constexpr float ANGULO_DE_VISION_RADIANES = 1.308996939f;
 }
 ```
 
-### Declaracion de Clase `CerebroSecuaz`
-```cpp
-class CerebroSecuaz : public CerebroBase {
-private:
-    double segundosParaConfirmarLaSospecha;
-    int casillasAdyacentesRevisadas;
-    bool movimientoLoControlaLaFisica;
+## 5. TABLA DE TRANSICIÓN DE ESTADOS
+1. `Patrullando`:
+   - Si detecta a Scooby en cono de visión y Scooby no está camuflado: transiciona a `SospechandoConDuda`. Reinicia `temporizadorDeSospechaAcumulado = 0.0f`.
+   - Si recibe un aviso acústico relevante de `AvisosEntreAgentes`: orienta la vista hacia la coordenada del aviso y transiciona a `SospechandoConDuda`.
+2. `SospechandoConDuda`:
+   - Incrementa `temporizadorDeSospechaAcumulado += segundosTranscurridos`.
+   - Si Scooby sigue visible y `temporizadorDeSospechaAcumulado >= TIEMPO_REQUERIDO_DE_CONFIRMACION_DE_SOSPECHA`:
+     - Emite aviso en `mundo.obtenerAvisosEntreAgentes().registrarAviso(TipoDeAvisoAcustico::ScoobyAvistado, ...)`.
+     - Transiciona a `Persiguiendo`.
+     - Solicita camino A* a la posición de Scooby.
+   - Si Scooby desaparece del cono antes de completar el tiempo: transiciona a `Patrullando`.
+3. `Persiguiendo`:
+   - Recalcula camino A* cada 0.5 segundos acumulados.
+   - Si Scooby es visible: actualiza `ultimaPosicionVisualConfirmada` y consume nodos de la ruta A* para desplazarse a `VELOCIDAD_DE_PERSECUCION`.
+   - Si Scooby no es visible y la ruta A* se agota o llega al último nodo: transiciona a `BuscandoEnUltimoRastro` e inicia `temporizadorDeInspeccionEnRastro = 0.0f`.
+4. `BuscandoEnUltimoRastro`:
+   - Incrementa `temporizadorDeInspeccionEnRastro += segundosTranscurridos`.
+   - Rota la orientación cada 1.0 segundo para simular búsqueda en el entorno.
+   - Si detecta a Scooby: transiciona a `Persiguiendo`.
+   - Si `temporizadorDeInspeccionEnRastro >= TIEMPO_DE_INSPECCION_EN_ULTIMO_RASTRO`: transiciona a `Patrullando`, recalculando camino A* hacia el punto de patrulla más cercano.
 
-    void avanzarHaciaCasillaEsquivandoObstaculos(PersonajeNoJugable& cuerpo, CoordenadaCasilla destino, const Mapa& mapa, double segundosTranscurridos);
+## 6. LÓGICA PASO A PASO DE IMPLEMENTACIÓN
+### `actualizar`
+1. Descuenta `acumuladorDeTiempoTranscurrido` de la clase base según el intervalo configurado.
+2. Consulta el estado actual de la máquina de estados.
+3. Invoca el método privado correspondiente según el estado.
+4. Sincroniza la orientación calculada con `personajePortador.establecerOrientacion()`.
+5. Actualiza la coordenada lógica y visual del personaje portador.
 
-public:
-    CerebroSecuaz(double desfaseInicial, double segSospecha, double rangoVision, bool porFisica);
-
-protected:
-    EstimuloPercibido percibirEntorno(const PersonajeNoJugable& cuerpo, const Scooby& scooby, const Mapa& mapa, const BuzonCompartidoDeAvisos& buzon) override;
-    void razonarSiguienteDecision(const EstimuloPercibido& estimulo, PersonajeNoJugable& cuerpo, const Mapa& mapa, BuzonCompartidoDeAvisos& buzon, AzarConSemilla& azar, double segundosTranscurridos) override;
-    void ejecutarMovimientoOAccion(PersonajeNoJugable& cuerpo, const Mapa& mapa, AzarConSemilla& azar, double segundosTranscurridos) override;
-    void actualizarMemoriaYAprendizaje(const EstimuloPercibido& estimulo, const PersonajeNoJugable& cuerpo) override;
-};
-
-#endif
-```
-
----
-
-## Archivo de Implementacion: `cerebro_secuaz.cpp`
-
-### Inclusiones requeridas
-```cpp
-#include "inteligencia/cerebro_secuaz.h"
-#include "personajes/personaje_no_jugable.h"
-#include "personajes/scooby.h"
-#include "herramientas/calculos_espaciales.h"
-```
-
-### Implementacion de Metodos
-
-#### 1. Constructor
-- Llama a `CerebroBase(desfaseInicial, rangoVision, 2.4, 3.0)`.
-- `segundosParaConfirmarLaSospecha = segSospecha;`
-- `casillasAdyacentesRevisadas = 0;`
-- `movimientoLoControlaLaFisica = porFisica;`
-
-#### 2. `percibirEntorno`
-- Embudo de percepcion en 3 filtros:
-  1. Filtro 1 (Distancia al cuadrado):
-     - `double distCuad = CalculosEspaciales::calcularDistanciaAlCuadrado(cuerpo.obtenerPosicionX(), cuerpo.obtenerPosicionY(), scooby.obtenerPosicionX(), scooby.obtenerPosicionY());`
-     - Si `distCuad > (rangoDeVisionEnCasillas * rangoDeVisionEnCasillas)`: no ve a Scooby.
-  2. Filtro 2 (Cono de vision):
-     - Evalua `CalculosEspaciales::estaPuntoDentroDelConoDeVision(cuerpo.obtenerPosicionX(), cuerpo.obtenerPosicionY(), cuerpo.obtenerDireccionMirada(), scooby.obtenerPosicionX(), scooby.obtenerPosicionY(), ConstantesCerebroSecuaz::APERTURA_CONO_VISION_RADIANES)`.
-     - Si esta fuera del cono: no ve a Scooby.
-  3. Filtro 3 (Linea de vista y camuflaje):
-     - Si `!scooby.estaVisibleParaLosEnemigos()`:
-       - Solo lo detecta si `memoriaPropia.vecesEscondidoEnElMismoArbusto >= 3` o si lo vio entrar a menos de `ConstantesCerebroSecuaz::DISTANCIA_DETECCION_ARBUSTO_CERCANO` casillas.
-     - Valida `mapa.tieneLineaDeVista(cuerpo.obtenerCasillaActual(), scooby.obtenerCasillaActual())`.
-- Buzon: consulta `buzon.buscarAvisoCercanoParaElAgente(cuerpo.obtenerCasillaActual(), aviso)`.
-- Retorna `EstimuloPercibido`.
-
-#### 3. `razonarSiguienteDecision`
-- Si `movimientoLoControlaLaFisica` (Centinela): solo actualiza icono a exclamacion si `estimulo.veAScooby` y publica aviso al buzon; no persigue.
-- Si `estimulo.veAScooby`:
-  - Si `estadoMentalActual != EstadoMentalDelAgente::PersiguiendoObjetivo && estadoMentalActual != EstadoMentalDelAgente::SospechandoConDuda`:
-    - `estadoMentalActual = EstadoMentalDelAgente::SospechandoConDuda;`
-    - `segundosRestantesEnElEstadoActual = segundosParaConfirmarLaSospecha;`
-    - `cuerpo.establecerIconoSobreLaCabeza(IconoSobreLaCabeza::SignoDeInterrogacion);`
-  - Si `estadoMentalActual == EstadoMentalDelAgente::SospechandoConDuda && segundosRestantesEnElEstadoActual <= 0.0`:
-    - `estadoMentalActual = EstadoMentalDelAgente::PersiguiendoObjetivo;`
-    - `cuerpo.establecerIconoSobreLaCabeza(IconoSobreLaCabeza::SignoDeExclamacion);`
-    - `buzon.publicarNuevoAviso(cuerpo.obtenerNumeroDeSerie(), estimulo.casillaDondeLoVio, false);`
-- Si no ve a Scooby:
-  - Si estaba persiguiendo: pasa a `EstadoMentalDelAgente::BuscandoEnUltimaPosicion;`
-  - Si estaba buscando y llego a la casilla: tras 1.5 s de rastreo vuelve a `PatrullandoSector;`
-  - Si recibe aviso de alerta y esta patrullando: acude a la casilla del aviso.
-
-#### 4. `ejecutarMovimientoOAccion`
-- Si `movimientoLoControlaLaFisica` retorna (el centinela se mueve por ecuacion parametrica).
-- Segun `estadoMentalActual`:
-  - `PatrullandoSector`: velocidad al 80% (2.4 cas/s). Recorre `listaDePuntosDeRutaFija` o sortea casilla libre si usa patrulla libre. Pausa de 1.2 s en cada punto de giro mirando a ambos lados.
-  - `PersiguiendoObjetivo`: velocidad al 100% (3.0 cas/s). Llama a `avanzarHaciaCasillaEsquivandoObstaculos` con la casilla actual de Scooby.
-  - `BuscandoEnUltimaPosicion`: camina hacia `memoriaPropia.ultimaCasillaDondeVioAScooby`.
-
-#### 5. `avanzarHaciaCasillaEsquivandoObstaculos`
-- Obtiene siguiente casilla mediante `mapa.calcularSiguientePasoHacia(cuerpo.obtenerCasillaActual(), destino, true)`.
-- Llama a `cuerpo.moverHacia(siguiente.columna + 0.5, siguiente.fila + 0.5, mapa, segundosTranscurridos);`
+### `avanzarHaciaPuntoObjetivo`
+1. Obtiene la posición flotante actual del personaje portador.
+2. Calcula el vector hacia el centro de la casilla objetivo `(objetivo.x * TAMANO_CASILLA + MITAD, objetivo.y * TAMANO_CASILLA + MITAD)`.
+3. Calcula la distancia euclidiana al cuadrado.
+4. Si la distancia al cuadrado es menor a `DISTANCIA_DE_LLEGADA_A_PUNTO_CUADRADA`, da por alcanzado el nodo y avanza el índice del camino A*.
+5. Si no, normaliza la dirección y aplica el desplazamiento escalado por la velocidad y `segundosTranscurridos`.
+6. Verifica colisiones con `mundo.obtenerMapa().esCasillaSolida()`. Si hay colisión, detiene el avance frontal y fuerza el recalculo de ruta en el siguiente ciclo.

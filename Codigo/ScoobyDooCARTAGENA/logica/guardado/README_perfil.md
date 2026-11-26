@@ -1,68 +1,81 @@
-# ESPECIFICACION TECNICA: perfil.h
+# ESPECIFICACIÓN TÉCNICA DE BAJO NIVEL: PERFIL DE USUARIO
 
-## Archivo de Cabecera: `perfil.h` (Solo .h)
+## 1. PROPÓSITO ARQUITECTÓNICO Y ROL EN EL SISTEMA
+La clase `PerfilDeUsuario` encapsula los datos persistentes del jugador: nombre del detective, puntaje histórico, casos resueltos, tiempo acumulado de juego y rango obtenido. Debe estar completamente encapsulada con atributos privados y métodos con invariantes de validación para garantizar la coherencia antes de serializar o tras deserializar del disco.
 
-### Guardas de inclusion
+## 2. INCLUSIONES Y DEPENDENCIAS ESTRICTAS
 ```cpp
-#ifndef PERFIL_H
-#define PERFIL_H
-```
+#pragma once
 
-### Inclusiones requeridas
-```cpp
-#include <QString>
+#include <string>
 #include <vector>
-#include <array>
-#include "juego/dificultad.h"
+#include <cstdint>
 ```
 
-### Declaraciones Adelantadas
+## 3. ENUMERACIONES Y TIPOS
 ```cpp
-enum class NivelDeDificultad;
-```
-
-### Estructura `PerfilDeUsuario`
-```cpp
-struct PerfilDeUsuario {
-    QString nombreDelDetective;
-    bool nivelUnoTutorialSuperado;
-    NivelDeDificultad ultimaDificultadSeleccionada;
-    int mejorTiempoEnSegundos;
-    int casosResueltosTotales;
-    std::array<bool, 5> villanosDesenmascarados;
-    std::vector<int> ultimasMisionesJugadas;
-    double volumenGuardado;
-
-    PerfilDeUsuario()
-        : nombreDelDetective("Scooby")
-        , nivelUnoTutorialSuperado(false)
-        , ultimaDificultadSeleccionada(static_cast<NivelDeDificultad>(0))
-        , mejorTiempoEnSegundos(9999)
-        , casosResueltosTotales(0)
-        , villanosDesenmascarados{false, false, false, false, false}
-        , volumenGuardado(0.8) {}
-
-    inline QString obtenerRangoActualDelDetective() const {
-        if (casosResueltosTotales <= 2) {
-            return "Aprendiz";
-        } else if (casosResueltosTotales <= 7) {
-            return "Detective";
-        } else if (casosResueltosTotales <= 15) {
-            return "Sabueso";
-        }
-        return "Leyenda de Cartagena";
-    }
-
-    inline int contarVillanosDesenmascarados() const {
-        int contador = 0;
-        for (bool atrapado : villanosDesenmascarados) {
-            if (atrapado) {
-                contador++;
-            }
-        }
-        return contador;
-    }
+enum class RangoDelDetective : uint8_t {
+    NovatoDeMisterio = 0,
+    RastreadorDeCartagena = 1,
+    SabuesoDeBaluartes = 2,
+    InvestigadorMaestro = 3
 };
-
-#endif
 ```
+
+## 4. DECLARACIÓN COMPLETA DE LA CLASE
+```cpp
+class PerfilDeUsuario {
+public:
+    PerfilDeUsuario();
+    explicit PerfilDeUsuario(std::string nombreDelDetective);
+
+    const std::string& obtenerNombre() const;
+    int obtenerPuntajeTotal() const;
+    int obtenerCasosResueltos() const;
+    float obtenerTiempoTotalJugadoSegundos() const;
+    RangoDelDetective obtenerRango() const;
+    const std::vector<std::string>& obtenerHistorialDeMisiones() const;
+
+    void establecerNombre(const std::string& nuevoNombre);
+    void sumarPuntaje(int puntos);
+    void decrementarPuntaje(int puntos);
+    void registrarCasoResuelto();
+    void acumularTiempoJugado(float segundos);
+    void agregarMisionAlHistorial(const std::string& descripcionMision);
+
+    void reiniciarEstadisticas();
+
+private:
+    void actualizarRangoSegunProgreso();
+
+    std::string nombre;
+    int puntajeTotal;
+    int casosResueltos;
+    float tiempoTotalJugadoSegundos;
+    RangoDelDetective rango;
+    std::vector<std::string> historialDeMisiones;
+};
+```
+
+## 5. INVARIANTES DE CLASE Y REGLAS DE NEGOCIO
+1. El `nombre` no puede ser una cadena vacía; si se asigna vacía, se normaliza por defecto a `"Detective Misterio"`.
+2. El `puntajeTotal` nunca puede ser negativo; si una penalización reduce el puntaje por debajo de cero, se satura en 0.
+3. El rango se calcula automáticamente tras cada modificación de puntaje y casos resueltos:
+   - `InvestigadorMaestro`: `casosResueltos >= 3 && puntajeTotal >= 3000`.
+   - `SabuesoDeBaluartes`: `casosResueltos >= 2 && puntajeTotal >= 1800`.
+   - `RastreadorDeCartagena`: `casosResueltos >= 1 && puntajeTotal >= 800`.
+   - `NovatoDeMisterio`: en cualquier otro caso.
+4. `historialDeMisiones` tiene un tamaño máximo de 20 entradas (FIFO o truncamiento) para evitar crecimiento descontrolado de memoria.
+
+## 6. LÓGICA PASO A PASO DE IMPLEMENTACIÓN
+### `sumarPuntaje`
+1. Si `puntos > 0`: `puntajeTotal += puntos`.
+2. Invoca `actualizarRangoSegunProgreso()`.
+
+### `decrementarPuntaje`
+1. `puntajeTotal = std::max(0, puntajeTotal - puntos)`.
+2. Invoca `actualizarRangoSegunProgreso()`.
+
+### `agregarMisionAlHistorial`
+1. Inserta la descripción al final de `historialDeMisiones`.
+2. Si `historialDeMisiones.size() > 20`: elimina el primer elemento más antiguo (`historialDeMisiones.erase(historialDeMisiones.begin())`).

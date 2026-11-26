@@ -1,97 +1,83 @@
-# ESPECIFICACION TECNICA: dificultad.h / dificultad.cpp
+# ESPECIFICACIÓN TÉCNICA DE BAJO NIVEL: DIFICULTAD DEL JUEGO
 
-## Archivo de Cabecera: `dificultad.h`
+## 1. PROPÓSITO ARQUITECTÓNICO Y ROL EN EL SISTEMA
+El namespace `ConfiguracionDeDificultad` provee funciones puras y constantes inmutables `constexpr` que parametrizan la experiencia de juego según el nivel seleccionado (Fácil, Normal, Difícil, Experto). No mantiene estado mutable ni requiere instanciación, facilitando su consulta directa por `MundoDeCartagena`, `Scooby`, la IA y el ciclo día/noche.
 
-### Guardas de inclusion
+## 2. INCLUSIONES Y DEPENDENCIAS ESTRICTAS
 ```cpp
-#ifndef DIFICULTAD_H
-#define DIFICULTAD_H
+#pragma once
+
+#include <cstdint>
 ```
 
-### Enumeracion de Niveles
+## 3. ENUMERACIONES Y ESTRUCTURAS
 ```cpp
-enum class NivelDeDificultad {
-    Facil,
-    Medio,
-    Dificil,
-    Leyenda
+enum class NivelDeDificultad : uint8_t {
+    Facil = 0,
+    Normal = 1,
+    Dificil = 2,
+    Experto = 3
 };
-```
 
-### Estructura `ParametrosDeDificultad`
-```cpp
 struct ParametrosDeDificultad {
-    // Fisicas matematicas
-    double frecuenciaDelPenduloEnHertz;
-    double amplitudDelPenduloEnRadianes;
-    double radioDelCentinelaEnCasillas;
-    double velocidadAngularDelCentinela;
-    double segundosEntreDisparosDeCanon;
-
-    // Inteligencia artificial
-    int cantidadDeSecuaces;
-    double rangoDeVisionDeSecuacesEnCasillas;
-    double segundosDeRalentizacion;
-    int avistamientosParaAlertaDelVillano;
-    double segundosDeEnfriamientoDelVillano;
-    double segundosParaConfirmarSospecha;
-
-    // Economia y dinamicas
-    double segundosIniciales;
-    double provisionesPerdidasPorSegundo;
-    double multiplicadorDeRoboNocturno;
-    double segundosDelDia;
-    double segundosDeLaNoche;
-    int oportunidadesDeAcusacionIniciales;
-    bool mostrarPistaCercanaDeLaTrampa;
+    float multiplicadorVelocidadEnemigos;
+    float tiempoMaximoDeLuzDiurnaSegundos;
+    float tiempoMaximoDeOscuridadNocturnaSegundos;
+    float tasaConsumoDeEstamina;
+    float tasaRecuperacionDeEstamina;
+    int cantidadPistasRequeridasParaAcusar;
+    int vidasInicialesDeScooby;
+    bool habilitarNieblaDensa;
 };
 ```
 
-### Declaracion de Clase `Dificultad`
+## 4. DECLARACIÓN DE FUNCIONES PURAS
 ```cpp
-class Dificultad {
-public:
-    static ParametrosDeDificultad obtenerParametros(NivelDeDificultad nivel);
-    static void aplicarAsistenciaPorDerrotas(ParametrosDeDificultad& parametros, int derrotasSeguidas);
-};
-
-#endif
+namespace ConfiguracionDeDificultad {
+    ParametrosDeDificultad obtenerParametros(NivelDeDificultad nivel);
+    float obtenerMultiplicadorVelocidadEnemigos(NivelDeDificultad nivel);
+    int obtenerVidasIniciales(NivelDeDificultad nivel);
+    int obtenerPistasRequeridas(NivelDeDificultad nivel);
+}
 ```
 
----
+## 5. TABLA DE PARÁMETROS POR NIVEL DE DIFICULTAD
+1. `Facil`:
+   - `multiplicadorVelocidadEnemigos`: `0.80f`
+   - `tiempoMaximoDeLuzDiurnaSegundos`: `90.0f`
+   - `tiempoMaximoDeOscuridadNocturnaSegundos`: `45.0f`
+   - `tasaConsumoDeEstamina`: `12.0f`
+   - `tasaRecuperacionDeEstamina`: `25.0f`
+   - `cantidadPistasRequeridasParaAcusar`: `3`
+   - `vidasInicialesDeScooby`: `5`
+   - `habilitarNieblaDensa`: `false`
+2. `Normal`:
+   - `multiplicadorVelocidadEnemigos`: `1.00f`
+   - `tiempoMaximoDeLuzDiurnaSegundos`: `75.0f`
+   - `tiempoMaximoDeOscuridadNocturnaSegundos`: `60.0f`
+   - `tasaConsumoDeEstamina`: `16.0f`
+   - `tasaRecuperacionDeEstamina`: `20.0f`
+   - `cantidadPistasRequeridasParaAcusar`: `4`
+   - `vidasInicialesDeScooby`: `3`
+   - `habilitarNieblaDensa`: `false`
+3. `Dificil`:
+   - `multiplicadorVelocidadEnemigos`: `1.15f`
+   - `tiempoMaximoDeLuzDiurnaSegundos`: `60.0f`
+   - `tiempoMaximoDeOscuridadNocturnaSegundos`: `75.0f`
+   - `tasaConsumoDeEstamina`: `22.0f`
+   - `tasaRecuperacionDeEstamina`: `15.0f`
+   - `cantidadPistasRequeridasParaAcusar`: `5`
+   - `vidasInicialesDeScooby`: `2`
+   - `habilitarNieblaDensa`: `true`
+4. `Experto`:
+   - `multiplicadorVelocidadEnemigos`: `1.30f`
+   - `tiempoMaximoDeLuzDiurnaSegundos`: `45.0f`
+   - `tiempoMaximoDeOscuridadNocturnaSegundos`: `90.0f`
+   - `tasaConsumoDeEstamina`: `28.0f`
+   - `tasaRecuperacionDeEstamina`: `10.0f`
+   - `cantidadPistasRequeridasParaAcusar`: `5`
+   - `vidasInicialesDeScooby`: `1`
+   - `habilitarNieblaDensa`: `true`
 
-## Archivo de Implementacion: `dificultad.cpp`
-
-### Inclusiones requeridas
-```cpp
-#include "juego/dificultad.h"
-```
-
-### Implementacion de Metodos
-
-#### 1. `obtenerParametros`
-- Retorna struct con valores segun nivel:
-
-**Facil:**
-- Fisicas: `frecuencia = 0.30 Hz`, `amplitud = 0.40 rad`, `radioCentinela = 3.0 cas`, `velAngular = 0.7 rad/s`, `canon = cada 14.0 s`.
-- IA: `3 secuaces`, `vision = 4.0 cas`, `ralentizacion = 2.0 s`, `avistamientos = 4`, `enfriamientoVillano = 30.0 s`, `sospecha = 0.6 s`.
-- Economia: `1080.0 s (18 min)`, `drenaje = 0.15 prov/s`, `roboNocturno = 1.5`, `dia = 270.0 s`, `noche = 135.0 s`, `oportunidades = 3`, `pistaCercana = true`.
-
-**Medio:**
-- Fisicas: `frecuencia = 0.40 Hz`, `amplitud = 0.50 rad`, `radioCentinela = 3.0 cas`, `velAngular = 0.9 rad/s`, `canon = cada 11.0 s`.
-- IA: `5 secuaces`, `vision = 5.0 cas`, `ralentizacion = 3.0 s`, `avistamientos = 3`, `enfriamientoVillano = 25.0 s`, `sospecha = 0.4 s`.
-- Economia: `900.0 s (15 min)`, `drenaje = 0.20 prov/s`, `roboNocturno = 2.0`, `dia = 270.0 s`, `noche = 135.0 s`, `oportunidades = 2`, `pistaCercana = false`.
-
-**Dificil:**
-- Fisicas: `frecuencia = 0.50 Hz`, `amplitud = 0.60 rad`, `radioCentinela = 3.5 cas`, `velAngular = 1.1 rad/s`, `canon = cada 8.0 s`.
-- IA: `7 secuaces`, `vision = 6.0 cas`, `ralentizacion = 3.5 s`, `avistamientos = 2`, `enfriamientoVillano = 20.0 s`, `sospecha = 0.3 s`.
-- Economia: `780.0 s (13 min)`, `drenaje = 0.25 prov/s`, `roboNocturno = 2.5`, `dia = 240.0 s`, `noche = 150.0 s`, `oportunidades = 2`, `pistaCercana = false`.
-
-**Leyenda:**
-- Fisicas: `frecuencia = 0.60 Hz`, `amplitud = 0.70 rad`, `radioCentinela = 4.0 cas`, `velAngular = 1.3 rad/s`, `canon = cada 6.0 s`.
-- IA: `9 secuaces`, `vision = 7.0 cas`, `ralentizacion = 4.0 s`, `avistamientos = 2`, `enfriamientoVillano = 15.0 s`, `sospecha = 0.2 s`.
-- Economia: `600.0 s (10 min)`, `drenaje = 0.30 prov/s`, `roboNocturno = 3.0`, `dia = 210.0 s`, `noche = 180.0 s`, `oportunidades = 2`, `pistaCercana = false`.
-
-#### 2. `aplicarAsistenciaPorDerrotas`
-- Si `derrotasSeguidas >= 2`:
-  - `parametros.rangoDeVisionDeSecuacesEnCasillas *= 0.90;` (asistencia silenciosa reduciendo 10% la vision).
+## 6. LÓGICA DE IMPLEMENTACIÓN
+Implementa un bloque `switch(nivel)` exhaustivo que retorna directamente una estructura `ParametrosDeDificultad` configurada con valores `constexpr`. No realiza alocaciones dinámicas.

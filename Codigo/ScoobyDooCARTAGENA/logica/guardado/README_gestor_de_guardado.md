@@ -1,97 +1,80 @@
-# ESPECIFICACION TECNICA: gestor_de_guardado.h / gestor_de_guardado.cpp
+# ESPECIFICACIÓN TÉCNICA DE BAJO NIVEL: GESTOR DE GUARDADO
 
-## Archivo de Cabecera: `gestor_de_guardado.h`
+## 1. PROPÓSITO ARQUITECTÓNICO Y ROL EN EL SISTEMA
+La clase `GestorDeGuardado` es responsable de la persistencia atómica y la deserialización robusta del `PerfilDeUsuario` en disco utilizando `QSaveFile` de Qt. Garantiza que ante un fallo de energía, caída del programa o archivo corrupto, nunca se destruya la partida previa. Aplica validación estricta de tipos numéricos mediante conversiones seguras con control de errores (`toInt(&ok)`), cargando los datos en una instancia temporal antes de sobreescribir el perfil en memoria.
 
-### Guardas de inclusion
+## 2. INCLUSIONES Y DEPENDENCIAS ESTRICTAS
 ```cpp
-#ifndef GESTOR_DE_GUARDADO_H
-#define GESTOR_DE_GUARDADO_H
-```
+#pragma once
 
-### Inclusiones requeridas
-```cpp
-#include <QString>
 #include "guardado/perfil.h"
-```
-
-### Declaracion de Clase `GestorDeGuardado`
-```cpp
-class GestorDeGuardado {
-private:
-    QString rutaDelArchivoPrincipalDePerfiles;
-    QString rutaDelArchivoDeRespaldo;
-
-public:
-    GestorDeGuardado();
-
-    void inicializarRutasEnElDirectorioDelSistema();
-    void cargarPerfilDesdeDisco(PerfilDeUsuario& perfilDestino);
-    void guardarPerfilEnDisco(const PerfilDeUsuario& perfilActual);
-    void recuperarPerfilDesdeElRespaldo(PerfilDeUsuario& perfilDestino);
-
-    QString obtenerRutaArchivoPrincipal() const;
-    QString obtenerRutaArchivoRespaldo() const;
-};
-
-#endif
-```
-
----
-
-## Archivo de Implementacion: `gestor_de_guardado.cpp`
-
-### Inclusiones requeridas
-```cpp
-#include "guardado/gestor_de_guardado.h"
-#include <QStandardPaths>
-#include <QDir>
+#include <QString>
+#include <QSaveFile>
 #include <QFile>
 #include <QTextStream>
-#include <stdexcept>
+#include <cstdint>
 ```
 
-### Implementacion de Metodos
+## 3. DECLARACIÓN COMPLETA DE LA CLASE
+```cpp
+class GestorDeGuardado {
+public:
+    GestorDeGuardado();
+    explicit GestorDeGuardado(QString rutaDeArchivoPersonalizada);
+    ~GestorDeGuardado() = default;
 
-#### 1. Constructor
-- Llama a `inicializarRutasEnElDirectorioDelSistema()`.
+    bool guardarPerfil(const PerfilDeUsuario& perfil);
+    bool cargarPerfil(PerfilDeUsuario& perfilDestino);
+    bool existeArchivoDeGuardado() const;
+    void eliminarArchivoDeGuardado();
 
-#### 2. `inicializarRutasEnElDirectorioDelSistema`
-- Obtiene la carpeta segura:
-  - `QString directorioSeguro = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);`
-  - `QDir dir(directorioSeguro); if (!dir.exists()) dir.mkpath(".");`
-  - `rutaDelArchivoPrincipalDePerfiles = directorioSeguro + "/perfiles.txt";`
-  - `rutaDelArchivoDeRespaldo = directorioSeguro + "/perfiles.txt.bak";`
+    const QString& obtenerRutaDeArchivo() const;
 
-#### 3. `cargarPerfilDesdeDisco`
-- Si no existe `rutaDelArchivoPrincipalDePerfiles`:
-  - `perfilDestino = PerfilDeUsuario{};`
-  - Retorna.
-- Intenta leer archivo en bloque `try`:
-  - `QFile archivo(rutaDelArchivoPrincipalDePerfiles);`
-  - Si no abre, lanza `std::runtime_error("No se pudo abrir perfiles.txt");`
-  - Lee linea por linea parseando `CLAVE=VALOR`:
-    - `NOMBRE`: `perfilDestino.nombreDelDetective = valor;`
-    - `NIVEL1_COMPLETADO`: `perfilDestino.nivelUnoTutorialSuperado = (valor.toInt() == 1);`
-    - `DIFICULTAD`: `perfilDestino.ultimaDificultadSeleccionada = static_cast<NivelDeDificultad>(valor.toInt());`
-    - `MEJOR_TIEMPO`: `perfilDestino.mejorTiempoEnSegundos = valor.toInt();`
-    - `CASOS_RESUELTOS`: `perfilDestino.casosResueltosTotales = valor.toInt();`
-    - `VILLANOS`: parsea 5 booleanos separados por comas.
-    - `ULTIMAS_MISIONES`: parsea enteros separados por comas.
-    - `VOLUMEN`: `perfilDestino.volumenGuardado = valor.toDouble();`
-- En bloque `catch (const std::exception&)`:
-  - Llama a `recuperarPerfilDesdeElRespaldo(perfilDestino);`
+private:
+    QString rutaDeArchivo;
+};
+```
 
-#### 4. `guardarPerfilEnDisco`
-- Copia respaldo previo:
-  - Si existe `rutaDelArchivoPrincipalDePerfiles`:
-    - `QFile::remove(rutaDelArchivoDeRespaldo);`
-    - `QFile::copy(rutaDelArchivoPrincipalDePerfiles, rutaDelArchivoDeRespaldo);`
-- Abre archivo principal en modo escritura:
-  - Escribe lineas en formato clave=valor ordenado.
-  - Cierra archivo.
+## 4. FORMATO DE ARCHIVO Y CONSTANTES
+El archivo se guarda en texto plano delimitado por claves y valores para máxima legibilidad e inspección:
+```text
+NOMBRE=Scooby Detective
+PUNTAJE=1250
+CASOS=1
+TIEMPO=430.5
+HISTORIAL=Mision 1 completada;Mision 2 completada;
+```
 
-#### 5. `recuperarPerfilDesdeElRespaldo`
-- Si existe `rutaDelArchivoDeRespaldo`:
-  - Intenta cargar perfil desde respaldo.
-- Si falla o no existe:
-  - `perfilDestino = PerfilDeUsuario{};` (crea perfil nuevo limpio).
+```cpp
+namespace ConstantesGestorDeGuardado {
+    inline const QString NOMBRE_ARCHIVO_POR_DEFECTO = QStringLiteral("perfil_detective_scooby.dat");
+}
+```
+
+## 5. INVARIANTES DE CLASE Y REGLAS DE NEGOCIO
+1. `guardarPerfil` debe utilizar obligatoriamente `QSaveFile`. Si la escritura se interrumpe, `QSaveFile::cancelWriting()` asegura que el archivo original no sufra corrupción.
+2. `cargarPerfil` nunca muta directamente `perfilDestino` hasta que todos los campos requeridos hayan sido leídos y validados con éxito en una instancia temporal local `PerfilDeUsuario perfilTemporal`.
+3. Todas las lecturas de enteros o números flotantes deben verificar la bandera de conversión (por ejemplo: `bool conversionExitosa = false; int valor = linea.toInt(&conversionExitosa);`). Si la conversión falla, la carga se aborta y se reporta error, protegiendo al motor de estados inconsistentes.
+
+## 6. LÓGICA PASO A PASO DE IMPLEMENTACIÓN
+### `guardarPerfil`
+1. Instancia `QSaveFile archivoSeguro(rutaDeArchivo)`.
+2. Si `!archivoSeguro.open(QIODevice::WriteOnly | QIODevice::Text)`, retorna falso.
+3. Instancia `QTextStream flujoSalida(&archivoSeguro)`.
+4. Escribe cada campo en formato `CLAVE=VALOR\n`.
+5. Serializa el historial uniendo las cadenas con delimitador `;`.
+6. Invoca `archivoSeguro.commit()`. Retorna verdadero si la operación de commit fue exitosa.
+
+### `cargarPerfil`
+1. Instancia `QFile archivo(rutaDeArchivo)`.
+2. Si `!archivo.exists()` o `!archivo.open(QIODevice::ReadOnly | QIODevice::Text)`, retorna falso.
+3. Instancia `PerfilDeUsuario perfilTemporal`.
+4. Lee línea por línea con `QTextStream flujoEntrada(&archivo)`.
+5. Separa cada línea por el primer carácter `=` encontrado.
+6. Valida y asigna según la clave:
+   - `NOMBRE`: invoca `perfilTemporal.establecerNombre(...)`.
+   - `PUNTAJE`: convierte con `toInt(&ok)`. Si `!ok`, aborta y retorna falso. Invoca `perfilTemporal.sumarPuntaje(...)`.
+   - `CASOS`: convierte con `toInt(&ok)`. Si `!ok`, aborta y retorna falso.
+   - `TIEMPO`: convierte con `toFloat(&ok)`. Si `!ok`, aborta y retorna falso. Invoca `perfilTemporal.acumularTiempoJugado(...)`.
+   - `HISTORIAL`: divide por `;` y agrega cada elemento a `perfilTemporal.agregarMisionAlHistorial(...)`.
+7. Si la lectura de todo el archivo fue exitosa, copia `perfilDestino = perfilTemporal` y retorna verdadero.

@@ -1,71 +1,69 @@
-# ESPECIFICACION TECNICA: mision_pendulo.h / mision_pendulo.cpp
+# ESPECIFICACIÓN TÉCNICA DE BAJO NIVEL: MISIÓN PÉNDULO
 
-## Archivo de Cabecera: `mision_pendulo.h`
+## 1. PROPÓSITO ARQUITECTÓNICO Y ROL EN EL SISTEMA
+La clase `MisionPendulo` hereda de `MisionBase` y modela los desafíos mecánicos y de sincronización temporal en los que el jugador debe interactuar con un objeto oscilante (lámpara colonial, badajo de campana de la iglesia de San Pedro Claver o trampa de péndulo) en una ventana angular específica para destrabar un pasadizo o desactivar una alarma.
 
-### Guardas de inclusion
+## 2. INCLUSIONES Y DEPENDENCIAS ESTRICTAS
 ```cpp
-#ifndef MISION_PENDULO_H
-#define MISION_PENDULO_H
-```
+#pragma once
 
-### Inclusiones requeridas
-```cpp
 #include "investigacion/misiones/mision.h"
-#include "personajes/objeto_del_escenario.h"
+#include <cstdint>
+
+class MundoDeCartagena;
 ```
 
-### Declaracion de Clase `MisionPendulo`
+## 3. DECLARACIÓN COMPLETA DE LA CLASE
 ```cpp
 class MisionPendulo : public MisionBase {
-private:
-    const ObjetoDelEscenario* lamparaObservada;
-    double radioDeInteraccionEnCasillas;
-
 public:
-    MisionPendulo(int codigo, int paso, const QString& titulo, const ObjetoDelEscenario* lampara);
+    MisionPendulo(
+        int identificadorUnico,
+        std::string tituloDescriptivo,
+        std::string descripcionDetallada,
+        int recompensaDePuntaje,
+        int identificadorDelObjetoPendulo,
+        float anguloObjetivoRadianes,
+        float margenDeToleranciaRadianes,
+        int aciertosConsecutivosRequeridos
+    );
 
-    void prepararMision(AzarConSemilla& azar, const Mapa& mapa) override;
-    bool evaluarCumplimientoEnCuadro(const SituacionActualDelMundo& situacion) override;
+    ~MisionPendulo() override = default;
 
-    void asignarLamparaObservada(const ObjetoDelEscenario* lampara);
+    void iniciar(MundoDeCartagena& mundo) override;
+    void actualizar(MundoDeCartagena& mundo, float segundosTranscurridos) override;
+    bool verificarCondicionDeCompletitud(MundoDeCartagena& mundo) override;
+    void completar(MundoDeCartagena& mundo) override;
+    void reiniciar() override;
+
+    int obtenerIdentificadorDelObjetoPendulo() const;
+    float obtenerAnguloObjetivoRadianes() const;
+    float obtenerMargenDeToleranciaRadianes() const;
+    int obtenerAciertosConsecutivosRequeridos() const;
+    int obtenerAciertosActuales() const;
+
+    bool intentarAccionDeSincronizacion(float anguloActualDelPendulo);
+
+private:
+    int identificadorDelObjetoPendulo;
+    float anguloObjetivoRadianes;
+    float margenDeToleranciaRadianes;
+    int aciertosConsecutivosRequeridos;
+    int aciertosActuales;
 };
-
-#endif
 ```
 
----
+## 4. INVARIANTES DE CLASE Y REGLAS DE NEGOCIO
+1. `aciertosConsecutivosRequeridos` debe ser al menos 1.
+2. Si un intento de sincronización falla (`intentarAccionDeSincronizacion` con ángulo fuera del margen tolerado), `aciertosActuales` se reinicia a cero (penalización estricta de ritmo).
+3. `verificarCondicionDeCompletitud` evalúa `aciertosActuales >= aciertosConsecutivosRequeridos`.
 
-## Archivo de Implementacion: `mision_pendulo.cpp`
-
-### Inclusiones requeridas
-```cpp
-#include "investigacion/misiones/mision_pendulo.h"
-#include "personajes/scooby.h"
-#include "herramientas/calculos_espaciales.h"
-```
-
-### Implementacion de Metodos
-
-#### 1. Constructor
-- Llama a `MisionBase(codigo, paso, titulo)`.
-- `lamparaObservada = lampara;`
-- `radioDeInteraccionEnCasillas = 2.0;`
-
-#### 2. `asignarLamparaObservada`
-- `lamparaObservada = lampara;`
-
-#### 3. `prepararMision`
-- No requiere generacion espacial; la lampara esta fija en la pared segun el mapa de detalles.
-
-#### 4. `evaluarCumplimientoEnCuadro`
-- Si `lamparaObservada == nullptr` retorna `false`.
-- Valida pulsacion reciente:
-  - Si `!situacion.teclado.interactuarRecienPulsado` retorna `false`.
-- Valida cercania fisica de Scooby a la posicion de la lampara:
-  - `double distCuad = CalculosEspaciales::calcularDistanciaAlCuadrado(situacion.scooby.obtenerPosicionX(), situacion.scooby.obtenerPosicionY(), lamparaObservada->obtenerPosicionX(), lamparaObservada->obtenerPosicionY());`
-  - Si `distCuad > (radioDeInteraccionEnCasillas * radioDeInteraccionEnCasillas)` retorna `false`.
-- Valida sincronia con la fisica del pendulo:
-  - Si `lamparaObservada->estaLamparaEnAnguloMaximo()`:
-    - `finalizarYMarcarComoCompletada();`
-    - Retorna `true;`
-- Retorna `false;`
+## 5. LÓGICA PASO A PASO DE IMPLEMENTACIÓN
+### `intentarAccionDeSincronizacion`
+1. Calcula la diferencia absoluta `std::abs(anguloActualDelPendulo - anguloObjetivoRadianes)`.
+2. Si la diferencia es menor o igual a `margenDeToleranciaRadianes`:
+   - Incrementa `aciertosActuales++`.
+   - Retorna verdadero.
+3. Si la diferencia es mayor:
+   - Reinicia `aciertosActuales = 0`.
+   - Retorna falso.
