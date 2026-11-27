@@ -1,5 +1,13 @@
 # ESPECIFICACION TECNICA: mundo_de_cartagena.h / mundo_de_cartagena.cpp
 
+## Estado Actual de Implementacion (Pendiente de Dependencias)
+Este modulo se deja **pendiente intencionalmente** durante la construccion de `logica/mapa/` y se conserva este README intacto hasta finalizar las carpetas `personajes/`, `inteligencia/`, `investigacion/` y `juego/`.
+
+**Por que se pospone:**
+- `mundo_de_cartagena.h` depende directamente de cabeceras aun vacias (`inteligencia/avisos_entre_agentes.h`, `juego/teclado.h` e `investigacion/misiones/mision.h`).
+- `mundo_de_cartagena.cpp` instancia, actualiza y destruye entidades concretas de `personajes/`, cerebros de `inteligencia/` y parametros de `juego/dificultad.h`.
+- Implementarlo antes de construir esas capas impediria compilar y probar el proyecto paso a paso sin errores; al completarse dichas dependencias, se retomara esta especificacion en su propia sub-rama para compilar e integrar todo limpiamente.
+
 ## Archivo y Ubicacion
 `logica/mapa/mundo_de_cartagena.h`
 `logica/mapa/mundo_de_cartagena.cpp`
